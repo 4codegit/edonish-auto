@@ -14,7 +14,6 @@ Usage:
 """
 import sys
 import os
-import struct
 from pathlib import Path
 
 # ── Dynamically resolve customtkinter ──────────────────────────
@@ -26,21 +25,13 @@ except ImportError:
     print("WARNING: customtkinter not found, GUI build may fail!")
 
 # ── Dynamically resolve tkinter / Tcl-Tk ───────────────────────
-tkinter_path = None
 tcl_path = None
-tk_path = None
 try:
     import tkinter
     tkinter_path = Path(tkinter.__file__).parent
-    # Find Tcl/Tk library directory
     tcl_dir = tkinter_path / "tcl"
     if tcl_dir.exists():
         tcl_path = tcl_dir
-    # Find DLLs directory (Windows)
-    dll_dir = tkinter_path.parent / "DLLs"
-    if not dll_dir.exists():
-        # Try Python root / DLLs
-        dll_dir = Path(sys.base_exec_prefix) / "DLLs"
 except Exception:
     pass
 
@@ -49,14 +40,13 @@ block_cipher = None
 # ── Collect all data files ──────────────────────────────────────
 datas_list = []
 
-# CustomTkinter assets (icons, themes, etc.)
+# CustomTkinter — collect ENTIRE package
 if ctk_path and ctk_path.exists():
-    # Collect ENTIRE customtkinter package
     datas_list.append((str(ctk_path), 'customtkinter'))
+    print(f"  Adding CTk: {ctk_path}")
 
 # Tcl/Tk library files (needed for tkinter on all platforms)
 if tcl_path and tcl_path.exists():
-    # Find tcl8.x and tk8.x directories
     for item in tcl_path.iterdir():
         if item.is_dir() and (item.name.startswith('tcl') or item.name.startswith('tk')):
             datas_list.append((str(item), f'tcl/{item.name}'))
@@ -65,7 +55,7 @@ if tcl_path and tcl_path.exists():
 # ── Collect all binaries (DLLs, .pyd) ──────────────────────────
 binaries_list = []
 
-# Tkinter .pyd extension module
+# _tkinter extension module
 try:
     import _tkinter
     _tkinter_file = Path(_tkinter.__file__)
@@ -74,7 +64,7 @@ try:
 except (ImportError, AttributeError):
     pass
 
-# On Windows: collect ALL DLLs from Python DLLs directory
+# Windows: collect ALL necessary DLLs
 if sys.platform == 'win32':
     dll_search_dirs = [
         Path(sys.base_exec_prefix) / "DLLs",
@@ -85,78 +75,67 @@ if sys.platform == 'win32':
             continue
         for dll_file in dll_dir.iterdir():
             name_lower = dll_file.name.lower()
-            # Include critical DLLs
             if any(name_lower.startswith(p) for p in [
-                'tcl', 'tk',           # Tcl/Tk DLLs
-                'vcruntime',            # Visual C++ Runtime
-                'msvcp',                # MSVC Runtime
-                'python3',              # Python library
-                'python3xx',            # Python3xx.dll
-                'libcrypto',            # OpenSSL
-                'libssl',               # OpenSSL
-                'libffi',               # FFI
-                'sqlite3',              # SQLite
-                'select',               # Select module
-                'unicodedata',          # Unicode data
-                '_ctypes',              # ctypes
-                '_decimal',             # decimal
-                '_hashlib',             # hashlib
-                '_socket',              # socket
-                '_bz2',                 # bz2
-                '_lzma',                # lzma
-                '_zlib',                # zlib
+                'tcl', 'tk', 'vcruntime', 'msvcp',
+                'python3', 'libcrypto', 'libssl',
+                'libffi', 'sqlite3', 'select',
+                'unicodedata', '_ctypes', '_decimal',
+                '_hashlib', '_socket', '_bz2',
+                '_lzma', '_zlib',
             ]):
                 binaries_list.append((str(dll_file), '.'))
                 print(f"  Adding DLL: {dll_file.name}")
 
-# On Linux/macOS: find shared libraries
-if sys.platform in ('linux', 'darwin'):
+# Linux: find shared libraries
+if sys.platform.startswith('linux'):
     import ctypes.util
-    for lib_name in ['tcl', 'tk']:
+    for lib_name in ['tcl', 'tk', 'X11']:
         lib_path = ctypes.util.find_library(lib_name)
         if lib_path:
             binaries_list.append((lib_path, '.'))
             print(f"  Adding lib: {lib_path}")
 
-# ── Analysis ────────────────────────────────────────────────────
-a = Analysis(
-    ['main.py'],
-    pathex=[str(Path(sys.base_exec_prefix) / 'Lib' / 'site-packages')],
-    binaries=binaries_list,
-    datas=datas_list,
-    hiddenimports=[
-        # CustomTkinter
-        'customtkinter',
+# ── Hidden imports (platform-safe) ─────────────────────────────
+hidden_imports = [
+    'customtkinter',
+    'tkinter',
+    'tkinter.filedialog',
+    'tkinter.messagebox',
+    'tkinter.font',
+    'tkinter.ttk',
+    '_tkinter',
+    'requests',
+    'urllib3',
+    'urllib3.util',
+    'certifi',
+    'charset_normalizer',
+    'idna',
+    'darkdetect',
+    'packaging',
+    'json',
+    'threading',
+    'logging',
+    'concurrent.futures',
+]
+
+# Windows-only CTk modules
+if sys.platform == 'win32':
+    hidden_imports.extend([
         'customtkinter.windows',
         'customtkinter.windows.widgets',
         'customtkinter.windows.widgets.core',
         'customtkinter.windows.widgets.core_widget_classes',
         'customtkinter.windows.ctk_input_dialog',
         'customtkinter.windows.ctk_tk',
-        # Tkinter
-        'tkinter',
-        'tkinter.filedialog',
-        'tkinter.messagebox',
-        'tkinter.colorchooser',
-        'tkinter.font',
-        'tkinter.ttk',
-        '_tkinter',
-        # Network
-        'requests',
-        'urllib3',
-        'urllib3.util',
-        'urllib3.util.retry',
-        'certifi',
-        'charset_normalizer',
-        'idna',
-        # System
-        'darkdetect',
-        'packaging',
-        'json',
-        'threading',
-        'logging',
-        'concurrent.futures',
-    ],
+    ])
+
+# ── Analysis ────────────────────────────────────────────────────
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=binaries_list,
+    datas=datas_list,
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -173,57 +152,35 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-# ── Windows/Linux: single EXE with all DLLs embedded ────────────
-if sys.platform == 'win32':
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name='edonish-auto',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,           # Don't strip on Windows — can break DLLs
-        upx=False,             # UPX can corrupt DLLs on Windows
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=False,         # GUI mode — no console window
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-        icon=None,
-    )
-else:
-    # Linux: single binary
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name='edonish-auto',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=True,
-        upx=True,
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=False,
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-        icon=None,
-    )
+# ── EXE — unified config ────────────────────────────────────────
+is_windows = sys.platform == 'win32'
+is_macos = sys.platform == 'darwin'
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='edonish-auto',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=not is_windows,        # Don't strip on Windows
+    upx=not is_windows,          # UPX can corrupt DLLs on Windows
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,               # GUI mode
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,
+)
 
 # ── macOS: .app bundle ──────────────────────────────────────────
-if sys.platform == 'darwin':
+if is_macos:
     app = BUNDLE(
         exe,
         name='eDonish Auto.app',

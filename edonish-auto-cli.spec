@@ -3,8 +3,6 @@
 eDonish Auto CLI — PyInstaller spec file
 Builds: CLI executable (headless, no GUI dependencies)
 
-Includes all necessary DLLs for Windows compatibility.
-
 Usage:
   python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
 """
@@ -38,7 +36,7 @@ if sys.platform == 'win32':
 # ── Analysis ────────────────────────────────────────────────────
 a = Analysis(
     ['main_cli.py'],
-    pathex=[str(Path(sys.base_exec_prefix) / 'Lib' / 'site-packages')],
+    pathex=[],
     binaries=binaries_list,
     datas=[],
     hiddenimports=[
@@ -71,47 +69,26 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 # ── EXE ─────────────────────────────────────────────────────────
-if sys.platform == 'win32':
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name='edonish-auto-cli',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,         # Don't strip on Windows
-        upx=False,           # UPX can break DLLs
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=True,        # CLI mode — show console
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-    )
-else:
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        [],
-        name='edonish-auto-cli',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=True,
-        upx=True,
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=True,
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-    )
+is_windows = sys.platform == 'win32'
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='edonish-auto-cli',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=not is_windows,
+    upx=not is_windows,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,        # CLI mode — show console
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
