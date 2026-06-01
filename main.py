@@ -25,7 +25,7 @@ from flet import (
     border_radius, Border, BorderSide, BoxShadow, ThemeMode,
     Switch, FilledButton, FloatingActionButton, Badge, Tooltip,
     ButtonStyle, ControlState, VerticalDivider,
-    Colors, ScrollMode, AutoScroll,
+    Colors, ScrollMode,
 )
 
 from config import (
