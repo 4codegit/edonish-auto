@@ -31,15 +31,16 @@ build_rpm() {
     rm -rf "$RPMBUILD"
     mkdir -p "$RPMBUILD"/{SOURCES,SPECS,BUILD,RPMS,SRPMS}
 
-    # Create source tarball
-    local STAGING="$RPMBUILD/staging"
+    # Create source tarball — MUST contain a top-level dir named APP_NAME-VERSION
+    # because RPM %setup -q expects: cd APP_NAME-VERSION/
+    local STAGING="$RPMBUILD/staging/${APP_NAME}-${VERSION}"
     mkdir -p "$STAGING/dist/linux"
     cp dist/linux/edonish-auto "$STAGING/dist/linux/"
     cp dist/linux/edonish-auto-cli "$STAGING/dist/linux/"
     cp config.py api_client.py grade_engine.py "$STAGING/"
     
     cd "$RPMBUILD/staging"
-    tar czf "$RPMBUILD/SOURCES/${APP_NAME}-${VERSION}.tar.gz" .
+    tar czf "$RPMBUILD/SOURCES/${APP_NAME}-${VERSION}.tar.gz" "${APP_NAME}-${VERSION}"
     cd "$SCRIPT_DIR"
 
     # Copy spec file
