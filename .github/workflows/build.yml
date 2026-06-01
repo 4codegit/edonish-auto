@@ -193,6 +193,13 @@ jobs:
             --collect-all certifi \
             main_cli.py
 
+      - name: Free disk space for .dmg creation
+        run: |
+          # Remove build artifacts and pip cache to free disk space
+          rm -rf build/
+          pip cache purge 2>/dev/null || true
+          df -h
+
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
