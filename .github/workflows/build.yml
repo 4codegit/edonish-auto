@@ -1,4 +1,4 @@
-name: Build eDonish Auto — Cross-Platform
+name: Build eDonish Auto — Cross-Platform (Flet)
 
 on:
   push:
@@ -8,15 +8,14 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 2.1.1
-  PYTHON_VERSION: '3.12'
-  # Python 3.12+ requires api-ms-win-core-path-l1-1-0.dll (only Win10 1703+)
-  # Python 3.11 supports Windows 7+ — use it for max compatibility
+  APP_VERSION: 3.0.0
+  # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
+  PYTHON_VERSION: '3.12'
 
 jobs:
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Windows .exe (with ALL DLLs embedded)
+  # BUILD: Windows .exe (Flet + PyInstaller)
   # ═══════════════════════════════════════════════════════════════
   build-windows:
     runs-on: windows-latest
@@ -35,38 +34,27 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller customtkinter requests
-
-      - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('OK')"
+          pip install flet requests pyinstaller
         shell: pwsh
 
-      - name: Build GUI executable (onefile + all DLLs)
+      - name: Build GUI executable with PyInstaller
         run: |
           python -m PyInstaller --clean --noconfirm `
             --onefile `
             --name edonish-auto `
             --windowed `
-            --hidden-import=customtkinter `
-            --hidden-import=tkinter `
-            --hidden-import=tkinter.filedialog `
-            --hidden-import=tkinter.messagebox `
-            --hidden-import=tkinter.font `
-            --hidden-import=tkinter.ttk `
-            --hidden-import=_tkinter `
+            --hidden-import=flet `
+            --hidden-import=flet_core `
+            --hidden-import=flet_runtime `
             --hidden-import=requests `
             --hidden-import=urllib3 `
             --hidden-import=urllib3.util `
             --hidden-import=certifi `
             --hidden-import=charset_normalizer `
             --hidden-import=idna `
-            --hidden-import=darkdetect `
-            --hidden-import=packaging `
-            --hidden-import=json `
-            --hidden-import=threading `
-            --hidden-import=concurrent.futures `
-            --collect-all customtkinter `
-            --collect-all tkinter `
+            --collect-all flet `
+            --collect-all flet_core `
+            --collect-all flet_runtime `
             main.py
         shell: pwsh
 
@@ -117,15 +105,13 @@ jobs:
             libxinerama1 libxcursor1 libxi6 libxtst6 \
             libgtk-3-0 libgdk-pixbuf2.0-0 libgl1 \
             libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
-            libatspi2.0-0 rpm dpkg-dev
+            libatspi2.0-0 rpm dpkg-dev \
+            libgmp-dev libmpfr-dev libcairo2-dev
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller customtkinter requests
-
-      - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('OK')"
+          pip install flet requests pyinstaller
 
       - name: Build GUI binary (PyInstaller onefile)
         run: |
@@ -133,20 +119,17 @@ jobs:
             --onefile \
             --name edonish-auto \
             --windowed \
-            --hidden-import=customtkinter \
-            --hidden-import=tkinter \
-            --hidden-import=tkinter.filedialog \
-            --hidden-import=tkinter.messagebox \
-            --hidden-import=tkinter.font \
-            --hidden-import=tkinter.ttk \
-            --hidden-import=_tkinter \
+            --hidden-import=flet \
+            --hidden-import=flet_core \
+            --hidden-import=flet_runtime \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
             --hidden-import=darkdetect \
             --hidden-import=packaging \
-            --collect-data customtkinter \
-            --collect-data tkinter \
+            --collect-all flet \
+            --collect-all flet_core \
+            --collect-all flet_runtime \
             main.py
 
       - name: Build CLI binary
@@ -197,30 +180,24 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install pyinstaller customtkinter requests
-
-      - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('OK')"
+          pip install flet requests pyinstaller
 
       - name: Build macOS .app bundle
         run: |
           python -m PyInstaller --clean --noconfirm \
             --name edonish-auto \
             --windowed \
-            --hidden-import=customtkinter \
-            --hidden-import=tkinter \
-            --hidden-import=tkinter.filedialog \
-            --hidden-import=tkinter.messagebox \
-            --hidden-import=tkinter.font \
-            --hidden-import=tkinter.ttk \
-            --hidden-import=_tkinter \
+            --hidden-import=flet \
+            --hidden-import=flet_core \
+            --hidden-import=flet_runtime \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
             --hidden-import=darkdetect \
             --hidden-import=packaging \
-            --collect-data customtkinter \
-            --collect-data tkinter \
+            --collect-all flet \
+            --collect-all flet_core \
+            --collect-all flet_runtime \
             --osx-bundle-identifier tj.edonish.auto \
             main.py
 
@@ -272,14 +249,20 @@ jobs:
         with:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v${{ env.APP_VERSION }}
+            ## eDonish Auto v${{ env.APP_VERSION }} — Flet/Flutter UI!
 
             Автоматизация электронного журнала edonish.tj
+
+            ### Что нового:
+            - Современный Material Design интерфейс (Flet/Flutter)
+            - Крупные, чёткие шрифты
+            - Тёмная/светлая тема
+            - Адаптивный дизайн
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto.exe`, запустите
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
-            - **Linux (Fedora/RHEL)**: `sudo rpm -i edonish-auto-*.rpm`
+            - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Откройте `edonish-auto-*.dmg`, перетащите в Applications
 
             ### CLI режим:
@@ -290,13 +273,6 @@ jobs:
             ### Важно для Windows:
             Если .exe не запускается из-за ошибки DLL, установите:
             [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-
-            ### RPM (Fedora/RHEL/AltLinux):
-            ```bash
-            sudo rpm -i edonish-auto-*.rpm
-            # или с автоматическим разрешением зависимостей:
-            sudo dnf install ./edonish-auto-*.rpm
-            ```
 
           files: |
             release-artifacts/**/*.exe

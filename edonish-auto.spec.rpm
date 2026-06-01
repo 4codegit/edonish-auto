@@ -1,5 +1,5 @@
 Name:           edonish-auto
-Version:        2.1.1
+Version:        3.0.0
 Release:        1%{?dist}
 Summary:        Automated grade management for edonish.tj electronic journal
 
@@ -62,6 +62,12 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
+* Mon Jun 02 2025 Kamar Narziev <kamar@edonish.tj> - 3.0.0-1
+- Rewritten UI with Flet/Flutter — Material Design
+- Large, readable fonts
+- Dark/Light theme toggle
+- NavigationRail sidebar
+
 * Mon Jun 02 2025 Kamar Narziev <kamar@edonish.tj> - 2.1.1-1
 - Fixed Windows api-ms-win-core-path-l1-1-0.dll error
 - Switched to Python 3.11 for Windows build
