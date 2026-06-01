@@ -171,7 +171,6 @@ jobs:
 
       - name: Build .rpm package
         run: bash package.sh rpm
-        continue-on-error: true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -291,6 +290,13 @@ jobs:
             ### Важно для Windows:
             Если .exe не запускается из-за ошибки DLL, установите:
             [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
+            ### RPM (Fedora/RHEL/AltLinux):
+            ```bash
+            sudo rpm -i edonish-auto-*.rpm
+            # или с автоматическим разрешением зависимостей:
+            sudo dnf install ./edonish-auto-*.rpm
+            ```
 
           files: |
             release-artifacts/**/*.exe
