@@ -193,21 +193,20 @@ jobs:
             --collect-all certifi \
             main_cli.py
 
-      - name: Free disk space for .dmg creation
+      - name: Free disk space and package macOS app
         run: |
-          # Remove build artifacts and pip cache to free disk space
+          # Remove build artifacts to free disk space
           rm -rf build/
+          rm -rf ~/Library/Caches/flet/ 2>/dev/null || true
           pip cache purge 2>/dev/null || true
           df -h
 
-      - name: Create .dmg
-        run: |
+          # Create ZIP archive instead of .dmg (requires less disk space)
           mkdir -p dist/dmg
           cp dist/edonish-auto-cli dist/dmg/
-          hdiutil create -volname "eDonish Auto" \
-            -srcfolder "dist/edonish-auto.app" \
-            -ov -format UDZO \
-            "dist/dmg/edonish-auto-${{ env.APP_VERSION }}.dmg"
+          cd dist
+          zip -r dmg/edonish-auto-${{ env.APP_VERSION }}-macos.zip edonish-auto.app
+          cd ..
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -252,7 +251,7 @@ jobs:
             - **Windows**: Скачайте `edonish-auto.exe`, запустите
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
-            - **macOS**: Откройте `edonish-auto-*.dmg`, перетащите в Applications
+            - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
 
             ### CLI режим:
             ```bash
