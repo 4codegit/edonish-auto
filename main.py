@@ -5,6 +5,16 @@ Automated grade management for edonish.tj
 """
 import sys
 import os
+
+# Fix SSL certificate verification in PyInstaller bundles.
+# Must be set BEFORE any library (flet, requests, urllib) uses HTTPS.
+try:
+    import certifi
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+except ImportError:
+    pass
+
 import json
 import threading
 import logging

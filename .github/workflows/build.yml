@@ -59,6 +59,7 @@ jobs:
             --collect-all flet_core `
             --collect-all flet_runtime `
             --collect-all flet_desktop `
+            --collect-all certifi `
             main.py
         shell: pwsh
 
@@ -71,6 +72,7 @@ jobs:
             --hidden-import=urllib3 `
             --hidden-import=urllib3.util `
             --hidden-import=certifi `
+            --collect-all certifi `
             main_cli.py
         shell: pwsh
 
@@ -136,6 +138,7 @@ jobs:
             --collect-all flet_core \
             --collect-all flet_runtime \
             --collect-all flet_desktop \
+            --collect-all certifi \
             main.py
 
       - name: Build CLI binary
@@ -146,6 +149,7 @@ jobs:
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
+            --collect-all certifi \
             main_cli.py
 
       - name: Move binaries to dist/linux
@@ -206,6 +210,7 @@ jobs:
             --collect-all flet_core \
             --collect-all flet_runtime \
             --collect-all flet_desktop \
+            --collect-all certifi \
             --osx-bundle-identifier tj.edonish.auto \
             main.py
 
@@ -217,6 +222,7 @@ jobs:
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
+            --collect-all certifi \
             main_cli.py
 
       - name: Create .dmg
