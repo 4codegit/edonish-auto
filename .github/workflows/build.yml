@@ -8,12 +8,12 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 2.0.0
+  APP_VERSION: 2.1.0
   PYTHON_VERSION: '3.12'
 
 jobs:
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Windows .exe + NSIS Installer
+  # BUILD: Windows .exe (with ALL DLLs embedded)
   # ═══════════════════════════════════════════════════════════════
   build-windows:
     runs-on: windows-latest
@@ -25,39 +25,54 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: pip install pyinstaller customtkinter requests
+      - name: Install VC++ Redistributable
+        run: |
+          choco install vcredist-all -y
+        shell: pwsh
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller customtkinter requests
+
+      - name: Verify Tkinter works
+        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
+        shell: pwsh
+
+      - name: List available DLLs
+        run: |
+          python -c "import sys, os; dll_dir = os.path.join(sys.base_exec_prefix, 'DLLs'); print('DLLs dir:', dll_dir); [print(f'  {f}') for f in sorted(os.listdir(dll_dir)) if f.lower().endswith(('.dll', '.pyd'))]" 2>nul || echo "No DLLs dir"
+        shell: pwsh
 
       - name: Build GUI executable
         run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
+        shell: pwsh
 
       - name: Build CLI executable
         run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
+        shell: pwsh
+
+      - name: Verify executables exist
+        run: |
+          dir dist\edonish-auto.exe
+          dir dist\edonish-auto-cli.exe
+        shell: pwsh
 
       - name: Prepare dist directory
         run: |
-          mkdir -p dist/windows
-          cp dist/edonish-auto.exe dist/windows/ 2>/dev/null || true
-          cp dist/edonish-auto-cli.exe dist/windows/ 2>/dev/null || true
-        shell: bash
-
-      - name: Create NSIS installer
-        uses: joncloud/makensis-action@v4
-        with:
-          script-file: installer.nsi
-          arguments: /DAPPVERSION=${{ env.APP_VERSION }}
-        continue-on-error: true
+          mkdir dist\windows
+          copy dist\edonish-auto.exe dist\windows\
+          copy dist\edonish-auto-cli.exe dist\windows\
+        shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: edonish-auto-windows
-          path: |
-            dist/windows/
-            dist/*.exe
+          path: dist/windows/
 
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Linux binary + .rpm + .deb
+  # BUILD: Linux binary + .deb + .rpm
   # ═══════════════════════════════════════════════════════════════
   build-linux:
     runs-on: ubuntu-latest
@@ -69,10 +84,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system dependencies
+      - name: Install system dependencies (X11 + GTK for Tkinter)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            python3-tk \
             libx11-6 libxext6 libxrender1 libxrandr2 \
             libxinerama1 libxcursor1 libxi6 libxtst6 \
             libgtk-3-0 libgdk-pixbuf2.0-0 libgl1 \
@@ -80,7 +96,12 @@ jobs:
             libatspi2.0-0 rpm dpkg-dev
 
       - name: Install Python dependencies
-        run: pip install pyinstaller customtkinter requests
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller customtkinter requests
+
+      - name: Verify Tkinter works
+        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
 
       - name: Build GUI binary
         run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
@@ -124,8 +145,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: pip install pyinstaller customtkinter requests
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller customtkinter requests
+
+      - name: Verify Tkinter works
+        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
 
       - name: Build macOS app bundle
         run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
@@ -172,19 +198,23 @@ jobs:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
             ## eDonish Auto v${{ env.APP_VERSION }}
-            
+
             Автоматизация электронного журнала edonish.tj
 
             ### Установка:
-            - 🪟 **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
-            - 🐧 **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
-            - 🐧 **Linux (Fedora/RHEL)**: `sudo rpm -i edonish-auto-*.rpm`
-            - 🍎 **macOS**: Откройте `edonish-auto-*.dmg`, перетащите в Applications
-            
+            - **Windows**: Скачайте `edonish-auto.exe`, запустите
+            - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
+            - **Linux (Fedora/RHEL)**: `sudo rpm -i edonish-auto-*.rpm`
+            - **macOS**: Откройте `edonish-auto-*.dmg`, перетащите в Applications
+
             ### CLI режим:
             ```bash
             edonish-auto-cli --login YOUR_LOGIN --password YOUR_PASSWORD
             ```
+
+            ### Важно для Windows:
+            Если при запуске .exe возникает ошибка DLL, установите:
+            - [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
           files: |
             release-artifacts/**/*.exe
