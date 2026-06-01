@@ -4,8 +4,8 @@ eDonish Auto — PyInstaller spec file
 Builds: GUI executable with CustomTkinter + ALL DLLs
 
 Fixes:
-  - Includes Tkinter/Tcl/Tk DLLs (tcl86t.dll, tk86t.dll, _tkinter.pyd)
-  - Includes Visual C++ Runtime DLLs (vcruntime140.dll, etc.)
+  - Includes Tkinter/Tcl/Tk DLLs for Windows
+  - Includes Visual C++ Runtime DLLs
   - Collects ALL customtkinter data files
   - Works on clean Windows without Python installed
 
@@ -24,17 +24,6 @@ try:
 except ImportError:
     print("WARNING: customtkinter not found, GUI build may fail!")
 
-# ── Dynamically resolve tkinter / Tcl-Tk ───────────────────────
-tcl_path = None
-try:
-    import tkinter
-    tkinter_path = Path(tkinter.__file__).parent
-    tcl_dir = tkinter_path / "tcl"
-    if tcl_dir.exists():
-        tcl_path = tcl_dir
-except Exception:
-    pass
-
 block_cipher = None
 
 # ── Collect all data files ──────────────────────────────────────
@@ -45,26 +34,10 @@ if ctk_path and ctk_path.exists():
     datas_list.append((str(ctk_path), 'customtkinter'))
     print(f"  Adding CTk: {ctk_path}")
 
-# Tcl/Tk library files (needed for tkinter on all platforms)
-if tcl_path and tcl_path.exists():
-    for item in tcl_path.iterdir():
-        if item.is_dir() and (item.name.startswith('tcl') or item.name.startswith('tk')):
-            datas_list.append((str(item), f'tcl/{item.name}'))
-            print(f"  Adding Tcl/Tk lib: {item.name}")
-
-# ── Collect all binaries (DLLs, .pyd) ──────────────────────────
+# ── Collect binaries (Windows DLLs) ────────────────────────────
 binaries_list = []
 
-# _tkinter extension module
-try:
-    import _tkinter
-    _tkinter_file = Path(_tkinter.__file__)
-    binaries_list.append((str(_tkinter_file), '.'))
-    print(f"  Adding _tkinter: {_tkinter_file.name}")
-except (ImportError, AttributeError):
-    pass
-
-# Windows: collect ALL necessary DLLs
+# Windows: collect ALL necessary DLLs from Python installation
 if sys.platform == 'win32':
     dll_search_dirs = [
         Path(sys.base_exec_prefix) / "DLLs",
@@ -85,15 +58,6 @@ if sys.platform == 'win32':
             ]):
                 binaries_list.append((str(dll_file), '.'))
                 print(f"  Adding DLL: {dll_file.name}")
-
-# Linux: find shared libraries
-if sys.platform.startswith('linux'):
-    import ctypes.util
-    for lib_name in ['tcl', 'tk', 'X11']:
-        lib_path = ctypes.util.find_library(lib_name)
-        if lib_path:
-            binaries_list.append((lib_path, '.'))
-            print(f"  Adding lib: {lib_path}")
 
 # ── Hidden imports (platform-safe) ─────────────────────────────
 hidden_imports = [
@@ -152,9 +116,8 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-# ── EXE — unified config ────────────────────────────────────────
+# ── EXE ─────────────────────────────────────────────────────────
 is_windows = sys.platform == 'win32'
-is_macos = sys.platform == 'darwin'
 
 exe = EXE(
     pyz,
@@ -166,11 +129,11 @@ exe = EXE(
     name='edonish-auto',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=not is_windows,        # Don't strip on Windows
-    upx=not is_windows,          # UPX can corrupt DLLs on Windows
+    strip=not is_windows,
+    upx=not is_windows,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,               # GUI mode
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -180,7 +143,7 @@ exe = EXE(
 )
 
 # ── macOS: .app bundle ──────────────────────────────────────────
-if is_macos:
+if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
         name='eDonish Auto.app',

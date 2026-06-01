@@ -26,8 +26,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install VC++ Redistributable
-        run: |
-          choco install vcredist-all -y
+        run: choco install vcredist-all -y
         shell: pwsh
 
       - name: Install Python dependencies
@@ -36,12 +35,7 @@ jobs:
           pip install pyinstaller customtkinter requests
 
       - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
-        shell: pwsh
-
-      - name: List available DLLs
-        run: |
-          python -c "import sys, os; dll_dir = os.path.join(sys.base_exec_prefix, 'DLLs'); print('DLLs dir:', dll_dir); [print(f'  {f}') for f in sorted(os.listdir(dll_dir)) if f.lower().endswith(('.dll', '.pyd'))]" 2>nul || echo "No DLLs dir"
+        run: python -c "import tkinter; import customtkinter; print('OK')"
         shell: pwsh
 
       - name: Build GUI executable
@@ -50,12 +44,6 @@ jobs:
 
       - name: Build CLI executable
         run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
-        shell: pwsh
-
-      - name: Verify executables exist
-        run: |
-          dir dist\edonish-auto.exe
-          dir dist\edonish-auto-cli.exe
         shell: pwsh
 
       - name: Prepare dist directory
@@ -84,7 +72,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system dependencies (X11 + GTK for Tkinter)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -101,10 +89,13 @@ jobs:
           pip install pyinstaller customtkinter requests
 
       - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
+        run: python -c "import tkinter; import customtkinter; print('OK')"
 
-      - name: Build GUI binary
-        run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
+      - name: Build GUI binary (with --collect-all for tkinter)
+        run: |
+          python -m PyInstaller edonish-auto.spec --clean --noconfirm \
+            --collect-all tkinter \
+            --collect-all customtkinter
 
       - name: Build CLI binary
         run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
@@ -151,10 +142,13 @@ jobs:
           pip install pyinstaller customtkinter requests
 
       - name: Verify Tkinter works
-        run: python -c "import tkinter; import customtkinter; print('Tkinter + CTk OK')"
+        run: python -c "import tkinter; import customtkinter; print('OK')"
 
       - name: Build macOS app bundle
-        run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
+        run: |
+          python -m PyInstaller edonish-auto.spec --clean --noconfirm \
+            --collect-all tkinter \
+            --collect-all customtkinter
 
       - name: Build CLI binary
         run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
@@ -213,8 +207,8 @@ jobs:
             ```
 
             ### Важно для Windows:
-            Если при запуске .exe возникает ошибка DLL, установите:
-            - [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+            Если .exe не запускается из-за ошибки DLL, установите:
+            [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 
           files: |
             release-artifacts/**/*.exe
