@@ -15,6 +15,35 @@ try:
 except ImportError:
     pass
 
+# Monkey-patch ssl.create_default_context to load certifi's CA bundle.
+# This fixes SSL errors when flet_desktop tries to download the Flutter
+# engine via urllib.request (which doesn't always respect SSL_CERT_FILE).
+try:
+    import ssl as _ssl
+    _orig_create_default_context = _ssl.create_default_context
+
+    def _patched_create_default_context(*args, **kwargs):
+        ctx = _orig_create_default_context(*args, **kwargs)
+        try:
+            import certifi as _certifi
+            ctx.load_verify_locations(_certifi.where())
+        except Exception:
+            pass
+        return ctx
+
+    _ssl.create_default_context = _patched_create_default_context
+except Exception:
+    pass
+
+# Fix Flet View path for PyInstaller bundles.
+# When running from a PyInstaller/flet pack bundle, the Flutter engine
+# is included in _MEIPASS/flet. Set FLET_VIEW_PATH so flet_desktop
+# finds it without trying to download at runtime.
+if getattr(sys, 'frozen', False):
+    _flet_view_dir = os.path.join(sys._MEIPASS, 'flet')
+    if os.path.isdir(_flet_view_dir):
+        os.environ['FLET_VIEW_PATH'] = _flet_view_dir
+
 import json
 import threading
 import logging
@@ -1167,4 +1196,4 @@ def main(page: Page):
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.run(target=main)

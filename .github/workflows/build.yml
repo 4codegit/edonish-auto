@@ -15,7 +15,7 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Windows .exe (Flet + PyInstaller)
+  # BUILD: Windows .exe (Flet + flet pack)
   # ═══════════════════════════════════════════════════════════════
   build-windows:
     runs-on: windows-latest
@@ -37,16 +37,9 @@ jobs:
           pip install flet flet-desktop requests pyinstaller
         shell: pwsh
 
-      - name: Build GUI executable with PyInstaller
+      - name: Build GUI executable with flet pack
         run: |
-          python -m PyInstaller --clean --noconfirm `
-            --onefile `
-            --name edonish-auto `
-            --windowed `
-            --hidden-import=flet `
-            --hidden-import=flet_core `
-            --hidden-import=flet_runtime `
-            --hidden-import=flet_desktop `
+          flet pack main.py --onefile --name edonish-auto --windowed `
             --hidden-import=requests `
             --hidden-import=urllib3 `
             --hidden-import=urllib3.util `
@@ -55,12 +48,7 @@ jobs:
             --hidden-import=idna `
             --hidden-import=darkdetect `
             --hidden-import=packaging `
-            --collect-all flet `
-            --collect-all flet_core `
-            --collect-all flet_runtime `
-            --collect-all flet_desktop `
-            --collect-all certifi `
-            main.py
+            --collect-all certifi
         shell: pwsh
 
       - name: Build CLI executable
@@ -119,27 +107,48 @@ jobs:
           pip install --upgrade pip
           pip install flet flet-desktop requests pyinstaller
 
-      - name: Build GUI binary (PyInstaller onefile)
+      - name: Pre-cache Flet View (Flutter engine)
         run: |
-          python -m PyInstaller --clean --noconfirm \
-            --onefile \
-            --name edonish-auto \
-            --windowed \
-            --hidden-import=flet \
-            --hidden-import=flet_core \
-            --hidden-import=flet_runtime \
-            --hidden-import=flet_desktop \
+          # Trigger the Flet View download so it's cached before flet pack runs.
+          # This ensures flet pack can find and bundle the Flutter engine.
+          python -c "
+          import flet_desktop
+          import os, sys
+          try:
+              from flet_desktop import ensure_client_cached
+              ensure_client_cached()
+          except (AttributeError, ImportError, TypeError):
+              # Fallback: try to locate and trigger cache via internal API
+              try:
+                  from flet_desktop import FletDesktop
+                  fd = FletDesktop()
+                  # Force cache by trying to get the view path
+                  try:
+                      import asyncio
+                      asyncio.run(fd.open_flet_view_async('', on_session_created=lambda s: None))
+                  except:
+                      pass
+              except:
+                  pass
+          # Print cache location for debugging
+          xdg = os.environ.get('XDG_CACHE_HOME', os.path.join(os.path.expanduser('~'), '.cache'))
+          cache_dir = os.path.join(xdg, 'flet')
+          print(f'Flet cache dir: {cache_dir}')
+          if os.path.exists(cache_dir):
+              for item in os.listdir(cache_dir):
+                  full = os.path.join(cache_dir, item)
+                  print(f'  {item} (dir={os.path.isdir(full)})')
+          "
+
+      - name: Build GUI binary (flet pack onefile)
+        run: |
+          flet pack main.py --onefile --name edonish-auto --windowed \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
             --hidden-import=darkdetect \
             --hidden-import=packaging \
-            --collect-all flet \
-            --collect-all flet_core \
-            --collect-all flet_runtime \
-            --collect-all flet_desktop \
-            --collect-all certifi \
-            main.py
+            --collect-all certifi
 
       - name: Build CLI binary
         run: |
@@ -192,27 +201,38 @@ jobs:
           pip install --upgrade pip
           pip install flet flet-desktop requests pyinstaller
 
-      - name: Build macOS .app bundle
+      - name: Pre-cache Flet View (Flutter engine)
         run: |
-          python -m PyInstaller --clean --noconfirm \
-            --name edonish-auto \
-            --windowed \
-            --hidden-import=flet \
-            --hidden-import=flet_core \
-            --hidden-import=flet_runtime \
-            --hidden-import=flet_desktop \
+          python -c "
+          import flet_desktop
+          import os, sys
+          try:
+              from flet_desktop import ensure_client_cached
+              ensure_client_cached()
+          except (AttributeError, ImportError, TypeError):
+              try:
+                  from flet_desktop import FletDesktop
+                  fd = FletDesktop()
+              except:
+                  pass
+          cache_dir = os.path.join(os.path.expanduser('~'), 'Library', 'Caches', 'flet')
+          print(f'Flet cache dir: {cache_dir}')
+          if os.path.exists(cache_dir):
+              for item in os.listdir(cache_dir):
+                  full = os.path.join(cache_dir, item)
+                  print(f'  {item} (dir={os.path.isdir(full)})')
+          "
+
+      - name: Build macOS .app bundle (flet pack)
+        run: |
+          flet pack main.py --name edonish-auto --windowed \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
             --hidden-import=darkdetect \
             --hidden-import=packaging \
-            --collect-all flet \
-            --collect-all flet_core \
-            --collect-all flet_runtime \
-            --collect-all flet_desktop \
             --collect-all certifi \
-            --osx-bundle-identifier tj.edonish.auto \
-            main.py
+            --osx-bundle-identifier tj.edonish.auto
 
       - name: Build CLI binary
         run: |
@@ -268,10 +288,10 @@ jobs:
             Автоматизация электронного журнала edonish.tj
 
             ### Что нового:
-            - Исправлена ошибка запуска GUI (flet-desktop теперь включён в сборку)
-            - Удалены неиспользуемые импорты (MaterialState, MatplotlibChart)
-            - Исправлен импорт IconButton
-            - Исправлен Border.only() для статус-бара
+            - Исправлена ошибка запуска GUI (Flutter Engine теперь встроен в сборку через flet pack)
+            - Исправлена ошибка SSL при загрузке Flutter Engine
+            - Заменён ft.app() на ft.run() (устаревший API)
+            - Добавлена monkey-patch для ssl.create_default_context
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto.exe`, запустите
