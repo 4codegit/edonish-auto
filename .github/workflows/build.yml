@@ -34,7 +34,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet requests pyinstaller
+          pip install flet flet-desktop requests pyinstaller
         shell: pwsh
 
       - name: Build GUI executable with PyInstaller
@@ -46,15 +46,19 @@ jobs:
             --hidden-import=flet `
             --hidden-import=flet_core `
             --hidden-import=flet_runtime `
+            --hidden-import=flet_desktop `
             --hidden-import=requests `
             --hidden-import=urllib3 `
             --hidden-import=urllib3.util `
             --hidden-import=certifi `
             --hidden-import=charset_normalizer `
             --hidden-import=idna `
+            --hidden-import=darkdetect `
+            --hidden-import=packaging `
             --collect-all flet `
             --collect-all flet_core `
             --collect-all flet_runtime `
+            --collect-all flet_desktop `
             main.py
         shell: pwsh
 
@@ -111,7 +115,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet requests pyinstaller
+          pip install flet flet-desktop requests pyinstaller
 
       - name: Build GUI binary (PyInstaller onefile)
         run: |
@@ -122,6 +126,7 @@ jobs:
             --hidden-import=flet \
             --hidden-import=flet_core \
             --hidden-import=flet_runtime \
+            --hidden-import=flet_desktop \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
@@ -130,6 +135,7 @@ jobs:
             --collect-all flet \
             --collect-all flet_core \
             --collect-all flet_runtime \
+            --collect-all flet_desktop \
             main.py
 
       - name: Build CLI binary
@@ -180,7 +186,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
-          pip install flet requests pyinstaller
+          pip install flet flet-desktop requests pyinstaller
 
       - name: Build macOS .app bundle
         run: |
@@ -190,6 +196,7 @@ jobs:
             --hidden-import=flet \
             --hidden-import=flet_core \
             --hidden-import=flet_runtime \
+            --hidden-import=flet_desktop \
             --hidden-import=requests \
             --hidden-import=urllib3 \
             --hidden-import=certifi \
@@ -198,6 +205,7 @@ jobs:
             --collect-all flet \
             --collect-all flet_core \
             --collect-all flet_runtime \
+            --collect-all flet_desktop \
             --osx-bundle-identifier tj.edonish.auto \
             main.py
 
@@ -249,15 +257,15 @@ jobs:
         with:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v${{ env.APP_VERSION }} — Flet/Flutter UI!
+            ## eDonish Auto v${{ env.APP_VERSION }}
 
             Автоматизация электронного журнала edonish.tj
 
             ### Что нового:
-            - Современный Material Design интерфейс (Flet/Flutter)
-            - Крупные, чёткие шрифты
-            - Тёмная/светлая тема
-            - Адаптивный дизайн
+            - Исправлена ошибка запуска GUI (flet-desktop теперь включён в сборку)
+            - Удалены неиспользуемые импорты (MaterialState, MatplotlibChart)
+            - Исправлен импорт IconButton
+            - Исправлен Border.only() для статус-бара
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto.exe`, запустите

@@ -1,13 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 eDonish Auto — PyInstaller spec file
-Builds: GUI executable with CustomTkinter + ALL DLLs
+Builds: GUI executable with Flet/Flutter UI
 
 Fixes:
-  - Includes Tkinter/Tcl/Tk DLLs for Windows
-  - Includes Visual C++ Runtime DLLs
-  - Collects ALL customtkinter data files
-  - Works on clean Windows without Python installed
+  - Includes flet + flet-desktop packages
+  - Collects ALL flet data files (Flutter engine, assets)
+  - Works on clean systems without Python installed
 
 Usage:
   python -m PyInstaller edonish-auto.spec --clean --noconfirm
@@ -16,23 +15,21 @@ import sys
 import os
 from pathlib import Path
 
-# ── Dynamically resolve customtkinter ──────────────────────────
-ctk_path = None
-try:
-    import customtkinter as ctk
-    ctk_path = Path(ctk.__path__[0])
-except ImportError:
-    print("WARNING: customtkinter not found, GUI build may fail!")
-
 block_cipher = None
 
 # ── Collect all data files ──────────────────────────────────────
 datas_list = []
 
-# CustomTkinter — collect ENTIRE package
-if ctk_path and ctk_path.exists():
-    datas_list.append((str(ctk_path), 'customtkinter'))
-    print(f"  Adding CTk: {ctk_path}")
+# Collect all Flet packages (includes Flutter engine, assets, etc.)
+for pkg_name in ['flet', 'flet_core', 'flet_runtime', 'flet_desktop']:
+    try:
+        mod = __import__(pkg_name)
+        pkg_path = Path(mod.__path__[0])
+        if pkg_path.exists():
+            datas_list.append((str(pkg_path), pkg_name))
+            print(f"  Adding {pkg_name}: {pkg_path}")
+    except ImportError:
+        print(f"WARNING: {pkg_name} not found, GUI build may fail!")
 
 # ── Collect binaries (Windows DLLs) ────────────────────────────
 binaries_list = []
@@ -61,19 +58,19 @@ if sys.platform == 'win32':
 
 # ── Hidden imports (platform-safe) ─────────────────────────────
 hidden_imports = [
-    'customtkinter',
-    'tkinter',
-    'tkinter.filedialog',
-    'tkinter.messagebox',
-    'tkinter.font',
-    'tkinter.ttk',
-    '_tkinter',
+    # Flet
+    'flet',
+    'flet_core',
+    'flet_runtime',
+    'flet_desktop',
+    # Network
     'requests',
     'urllib3',
     'urllib3.util',
     'certifi',
     'charset_normalizer',
     'idna',
+    # Utils
     'darkdetect',
     'packaging',
     'json',
@@ -81,17 +78,6 @@ hidden_imports = [
     'logging',
     'concurrent.futures',
 ]
-
-# Windows-only CTk modules
-if sys.platform == 'win32':
-    hidden_imports.extend([
-        'customtkinter.windows',
-        'customtkinter.windows.widgets',
-        'customtkinter.windows.widgets.core',
-        'customtkinter.windows.widgets.core_widget_classes',
-        'customtkinter.windows.ctk_input_dialog',
-        'customtkinter.windows.ctk_tk',
-    ])
 
 # ── Analysis ────────────────────────────────────────────────────
 a = Analysis(
@@ -107,6 +93,7 @@ a = Analysis(
         'matplotlib', 'numpy', 'PIL', 'scipy', 'pandas',
         'IPython', 'notebook', 'jupyter', 'selenium',
         'pytest', 'unittest', 'pydoc', 'pytz',
+        'customtkinter', 'tkinter', '_tkinter',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -152,8 +139,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'eDonish Auto',
             'CFBundleDisplayName': 'eDonish Auto',
-            'CFBundleVersion': '2.1.0',
-            'CFBundleShortVersionString': '2.1.0',
+            'CFBundleVersion': '3.0.1',
+            'CFBundleShortVersionString': '3.0.1',
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.13',
         },
