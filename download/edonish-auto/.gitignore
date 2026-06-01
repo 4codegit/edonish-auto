@@ -40,3 +40,8 @@ output/
 
 # Secrets
 .env
+
+# Build artifacts
+dist/
+build/
+release/
