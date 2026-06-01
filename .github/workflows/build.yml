@@ -8,8 +8,11 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 2.1.0
+  APP_VERSION: 2.1.1
   PYTHON_VERSION: '3.12'
+  # Python 3.12+ requires api-ms-win-core-path-l1-1-0.dll (only Win10 1703+)
+  # Python 3.11 supports Windows 7+ — use it for max compatibility
+  PYTHON_VERSION_WIN: '3.11'
 
 jobs:
   # ═══════════════════════════════════════════════════════════════
@@ -23,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION_WIN }}
 
       - name: Install VC++ Redistributable
         run: choco install vcredist-all -y
@@ -38,12 +41,45 @@ jobs:
         run: python -c "import tkinter; import customtkinter; print('OK')"
         shell: pwsh
 
-      - name: Build GUI executable
-        run: python -m PyInstaller edonish-auto.spec --clean --noconfirm
+      - name: Build GUI executable (onefile + all DLLs)
+        run: |
+          python -m PyInstaller --clean --noconfirm `
+            --onefile `
+            --name edonish-auto `
+            --windowed `
+            --hidden-import=customtkinter `
+            --hidden-import=tkinter `
+            --hidden-import=tkinter.filedialog `
+            --hidden-import=tkinter.messagebox `
+            --hidden-import=tkinter.font `
+            --hidden-import=tkinter.ttk `
+            --hidden-import=_tkinter `
+            --hidden-import=requests `
+            --hidden-import=urllib3 `
+            --hidden-import=urllib3.util `
+            --hidden-import=certifi `
+            --hidden-import=charset_normalizer `
+            --hidden-import=idna `
+            --hidden-import=darkdetect `
+            --hidden-import=packaging `
+            --hidden-import=json `
+            --hidden-import=threading `
+            --hidden-import=concurrent.futures `
+            --collect-all customtkinter `
+            --collect-all tkinter `
+            main.py
         shell: pwsh
 
       - name: Build CLI executable
-        run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
+        run: |
+          python -m PyInstaller --clean --noconfirm `
+            --onefile `
+            --name edonish-auto-cli `
+            --hidden-import=requests `
+            --hidden-import=urllib3 `
+            --hidden-import=urllib3.util `
+            --hidden-import=certifi `
+            main_cli.py
         shell: pwsh
 
       - name: Prepare dist directory
