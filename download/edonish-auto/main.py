@@ -51,6 +51,10 @@ class EdonishAutoApp(ctk.CTk):
         self.quarters_data = []
         self.teacher_subjects = []
 
+        # State
+        self._logged_in = False
+        self._current_plan = None
+
         # Configure window
         self.title(f"{APP_NAME} v{APP_VERSION}")
         self.geometry("1100x750")
@@ -60,9 +64,291 @@ class EdonishAutoApp(ctk.CTk):
 
         # Build UI
         self._build_ui()
+        self._build_menu_bar()
+
+        # Register global hotkeys
+        self._register_hotkeys()
 
         # Show login frame
         self._show_login()
+
+    # ── Menu Bar ───────────────────────────────────────────────────
+
+    def _build_menu_bar(self):
+        """Build the top menu bar with keyboard shortcuts."""
+        menubar = tk.Menu(self)
+
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Войти", accelerator="Ctrl+L", command=self._on_login)
+        file_menu.add_command(label="Выйти из аккаунта", accelerator="Ctrl+W", command=self._on_logout)
+        file_menu.add_separator()
+        file_menu.add_command(label="Выход", accelerator="Ctrl+Q", command=self._on_quit)
+        menubar.add_cascade(label="Файл", menu=file_menu)
+
+        # Actions menu
+        actions_menu = tk.Menu(menubar, tearoff=0)
+        actions_menu.add_command(label="Анализировать", accelerator="F5", command=self._on_analyze)
+        actions_menu.add_command(label="Запустить", accelerator="F9", command=self._on_start)
+        actions_menu.add_command(label="Остановить", accelerator="Esc", command=self._on_stop)
+        actions_menu.add_separator()
+        actions_menu.add_command(label="Загрузить журнал", accelerator="Ctrl+J", command=self._on_load_journal)
+        menubar.add_cascade(label="Действия", menu=actions_menu)
+
+        # View menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_command(label="Авто-оценки", accelerator="Ctrl+1", command=lambda: self._switch_tab(0))
+        view_menu.add_command(label="Журнал", accelerator="Ctrl+2", command=lambda: self._switch_tab(1))
+        view_menu.add_command(label="Логи", accelerator="Ctrl+3", command=lambda: self._switch_tab(2))
+        view_menu.add_separator()
+        view_menu.add_command(label="Очистить логи", accelerator="Ctrl+Shift+C", command=self._clear_logs)
+        menubar.add_cascade(label="Вид", menu=view_menu)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Горячие клавиши", accelerator="F1", command=self._show_shortcuts)
+        help_menu.add_command(label="О программе", command=self._show_about)
+        menubar.add_cascade(label="Справка", menu=help_menu)
+
+        self.config(menu=menubar)
+
+    # ── Hotkeys ─────────────────────────────────────────────────────
+
+    def _register_hotkeys(self):
+        """Register all keyboard shortcuts."""
+        # Global shortcuts (work everywhere)
+        self.bind_all("<Control-q>", lambda e: self._on_quit())
+        self.bind_all("<Control-w>", lambda e: self._on_logout() if self._logged_in else None)
+        self.bind_all("<F1>", lambda e: self._show_shortcuts())
+
+        # Login screen shortcuts
+        self.bind_all("<Control-l>", lambda e: self._focus_login())
+        self.bind_all("<Control-Return>", lambda e: self._smart_enter())
+
+        # Dashboard shortcuts
+        self.bind_all("<F5>", lambda e: self._on_analyze() if self._logged_in else None)
+        self.bind_all("<F9>", lambda e: self._on_start() if self._logged_in else None)
+        self.bind_all("<Escape>", lambda e: self._on_escape())
+
+        # Tab switching
+        self.bind_all("<Control-1>", lambda e: self._switch_tab(0) if self._logged_in else None)
+        self.bind_all("<Control-2>", lambda e: self._switch_tab(1) if self._logged_in else None)
+        self.bind_all("<Control-3>", lambda e: self._switch_tab(2) if self._logged_in else None)
+
+        # Journal / Logs
+        self.bind_all("<Control-j>", lambda e: self._switch_tab(1) if self._logged_in else None)
+        self.bind_all("<Control-Shift-C>", lambda e: self._clear_logs() if self._logged_in else None)
+
+        # Quick save report
+        self.bind_all("<Control-s>", lambda e: self._save_report() if self._logged_in else None)
+
+        # Select all in text widgets
+        self.bind_all("<Control-a>", self._on_select_all)
+
+        # Copy from text widgets
+        self.bind_all("<Control-c>", self._on_copy)
+
+        # Find/Search
+        self.bind_all("<Control-f>", lambda e: self._focus_search() if self._logged_in else None)
+
+    def _on_quit(self):
+        """Quit the application."""
+        if self._logged_in and self.engine.is_running:
+            if not messagebox.askyesno("Выход", "Оценки ещё заполняются. Выйти?"):
+                return
+            self.engine.stop()
+        self.quit()
+
+    def _on_escape(self):
+        """Handle Escape key — context-sensitive."""
+        if self._logged_in and self.engine.is_running:
+            self._on_stop()
+        elif self._logged_in:
+            # Could close dialogs, etc.
+            pass
+
+    def _smart_enter(self):
+        """Ctrl+Enter — context-sensitive action."""
+        if not self._logged_in:
+            self._on_login()
+        elif hasattr(self, '_current_plan') and self._current_plan:
+            self._on_start()
+
+    def _focus_login(self):
+        """Focus on login entry."""
+        if not self._logged_in:
+            self.login_id_entry.focus_set()
+
+    def _switch_tab(self, index: int):
+        """Switch to tab by index."""
+        try:
+            if hasattr(self, 'tabview') and self._logged_in:
+                self.tabview.set(self.tabview._tab_dict[list(self.tabview._tab_dict.keys())[index]])
+        except (IndexError, AttributeError):
+            pass
+
+    def _clear_logs(self):
+        """Clear the logs text widget."""
+        try:
+            self.logs_text.configure(state="normal")
+            self.logs_text.delete("1.0", "end")
+            self.logs_text.configure(state="disabled")
+            self._log_message("Логи очищены")
+        except Exception:
+            pass
+
+    def _save_report(self):
+        """Save current results/report to file."""
+        try:
+            if not hasattr(self, '_current_plan') or not self._current_plan:
+                messagebox.showinfo("Инфо", "Сначала выполните анализ (F5)")
+                return
+
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Текстовый файл", "*.txt"), ("JSON", "*.json"), ("Все файлы", "*.*")],
+                title="Сохранить отчёт",
+                initialfile=f"edonish_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            )
+            if not filepath:
+                return
+
+            plan = self._current_plan
+            if filepath.endswith(".json"):
+                import json
+                report = {
+                    "timestamp": datetime.now().isoformat(),
+                    "total_tasks": plan.total_tasks,
+                    "completed": plan.completed,
+                    "failed": plan.failed,
+                    "skipped": plan.skipped,
+                    "tasks": [
+                        {
+                            "student": t.student_name,
+                            "date": t.date_str,
+                            "grade": t.mark,
+                            "subject": t.subject_name,
+                            "group": t.group_name,
+                            "status": t.status,
+                        }
+                        for t in plan.tasks
+                    ],
+                }
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(report, f, ensure_ascii=False, indent=2)
+            else:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(f"eDonish Auto — Отчёт\n")
+                    f.write(f"{'='*60}\n")
+                    f.write(f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Всего задач: {plan.total_tasks}\n")
+                    f.write(f"Выполнено: {plan.completed}\n")
+                    f.write(f"Ошибки: {plan.failed}\n")
+                    f.write(f"Пропущено: {plan.skipped}\n\n")
+                    for t in plan.tasks:
+                        f.write(f"{t.status:<8} {t.student_name:<25} -> {t.mark} ({t.date_str}) [{t.group_name} | {t.subject_name}]\n")
+
+            self._log_message(f"Отчёт сохранён: {filepath}")
+            messagebox.showinfo("Сохранено", f"Отчёт сохранён:\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+
+    def _on_select_all(self, event):
+        """Select all text in text widgets."""
+        widget = event.widget
+        if isinstance(widget, (ctk.CTkTextbox, tk.Text)):
+            widget.tag_add("sel", "1.0", "end")
+            return "break"
+
+    def _on_copy(self, event):
+        """Copy selected text from text widgets."""
+        widget = event.widget
+        if isinstance(widget, (ctk.CTkTextbox, tk.Text)):
+            try:
+                selected = widget.get("sel.first", "sel.last")
+                self.clipboard_clear()
+                self.clipboard_append(selected)
+                return "break"
+            except tk.TclError:
+                pass
+
+    def _focus_search(self):
+        """Focus on class dropdown (as search/filter)."""
+        if self._logged_in:
+            self.class_menu.focus_set()
+
+    def _show_shortcuts(self):
+        """Show keyboard shortcuts dialog."""
+        shortcuts = """
+╔══════════════════════════════════════════════╗
+║        ГОРЯЧИЕ КЛАВИШИ — eDonish Auto        ║
+╚══════════════════════════════════════════════╝
+
+🔑 ВХОД:
+  Ctrl+L           Фокус на поле логина
+  Ctrl+Enter       Войти / Запустить
+  Enter            Войти (в поле пароля)
+
+🎯 АВТО-ОЦЕНКИ:
+  F5               Анализировать
+  F9               Запустить заполнение
+  Escape           Остановить выполнение
+  Ctrl+S           Сохранить отчёт
+
+📋 НАВИГАЦИЯ:
+  Ctrl+1           Вкладка «Авто-оценки»
+  Ctrl+2           Вкладка «Журнал»
+  Ctrl+3           Вкладка «Логи»
+  Ctrl+J           Перейти к журналу
+
+📝 РАБОТА С ТЕКСТОМ:
+  Ctrl+A           Выделить всё
+  Ctrl+C           Копировать
+  Ctrl+Shift+C     Очистить логи
+  Ctrl+F           Фокус на фильтр класса
+
+🏠 ОБЩИЕ:
+  Ctrl+Q           Выход из программы
+  Ctrl+W           Выйти из аккаунта
+  F1               Показать эту справку
+"""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Горячие клавиши")
+        dialog.geometry("480x560")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        # Center on parent
+        dialog.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - 480) // 2
+        y = self.winfo_y() + (self.winfo_height() - 560) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+        text = ctk.CTkTextbox(dialog, font=ctk.CTkFont(family="Courier", size=12), wrap="none")
+        text.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+        text.insert("1.0", shortcuts)
+        text.configure(state="disabled")
+
+        ctk.CTkButton(
+            dialog, text="Закрыть", width=120,
+            command=dialog.destroy,
+        ).pack(pady=(5, 10))
+
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        dialog.bind("<Return>", lambda e: dialog.destroy())
+
+    def _show_about(self):
+        """Show about dialog."""
+        messagebox.showinfo(
+            "О программе",
+            f"{APP_NAME} v{APP_VERSION}\n\n"
+            f"Автоматизация электронного журнала\n"
+            f"edonish.tj\n\n"
+            f"Горячие клавиши: F1"
+        )
+
+    # ── UI Build ────────────────────────────────────────────────────
 
     def _build_ui(self):
         """Build the main UI structure."""
@@ -113,7 +399,7 @@ class EdonishAutoApp(ctk.CTk):
         self.password_entry.pack(pady=(0, 20), padx=30)
 
         self.login_btn = ctk.CTkButton(
-            form, text="Войти", width=300, height=45,
+            form, text="Войти (Ctrl+Enter)", width=300, height=45,
             font=ctk.CTkFont(size=14, weight="bold"),
             command=self._on_login,
         )
@@ -153,7 +439,7 @@ class EdonishAutoApp(ctk.CTk):
         self.school_label.pack(side="left", padx=10)
 
         logout_btn = ctk.CTkButton(
-            top_bar, text="Выйти", width=80, height=30,
+            top_bar, text="Выйти (Ctrl+W)", width=120, height=30,
             fg_color="transparent", border_width=1,
             text_color=COLOR_ERROR, hover_color=COLOR_ERROR,
             command=self._on_logout,
@@ -238,13 +524,13 @@ class EdonishAutoApp(ctk.CTk):
         btn_row.pack(fill="x", padx=10, pady=(5, 10))
 
         self.analyze_btn = ctk.CTkButton(
-            btn_row, text="🔍 Анализировать", width=150,
+            btn_row, text="🔍 Анализировать (F5)", width=180,
             command=self._on_analyze,
         )
         self.analyze_btn.pack(side="left", padx=(0, 10))
 
         self.start_btn = ctk.CTkButton(
-            btn_row, text="🚀 Запустить", width=150,
+            btn_row, text="🚀 Запустить (F9)", width=180,
             fg_color=COLOR_SUCCESS, hover_color="#2d8e47",
             command=self._on_start,
             state="disabled",
@@ -252,7 +538,7 @@ class EdonishAutoApp(ctk.CTk):
         self.start_btn.pack(side="left", padx=(0, 10))
 
         self.stop_btn = ctk.CTkButton(
-            btn_row, text="⏹ Остановить", width=150,
+            btn_row, text="⏹ Стоп (Esc)", width=150,
             fg_color=COLOR_ERROR, hover_color="#c5221f",
             command=self._on_stop,
             state="disabled",
@@ -389,6 +675,7 @@ class EdonishAutoApp(ctk.CTk):
         self.user_label.configure(text=f"👤 {name}")
         self.school_label.configure(text=f"🏫 Школа ID: {self.api.school_id} | Роль: {self.api.role}")
 
+        self._logged_in = True
         self._show_dashboard()
         self._load_initial_data()
 
@@ -397,6 +684,12 @@ class EdonishAutoApp(ctk.CTk):
         self.login_status.configure(text=f"❌ {error_msg}", text_color=COLOR_ERROR)
 
     def _on_logout(self):
+        if self.engine.is_running:
+            if not messagebox.askyesno("Выход", "Оценки ещё заполняются. Выйти из аккаунта?"):
+                return
+            self.engine.stop()
+        self._logged_in = False
+        self._current_plan = None
         self.api = EdonishAPI()
         self.engine = GradeEngine(self.api)
         self.engine.set_callbacks(
@@ -568,7 +861,7 @@ class EdonishAutoApp(ctk.CTk):
         threading.Thread(target=analyze, daemon=True).start()
 
     def _on_analyze_complete(self, plan: GradePlan):
-        self.analyze_btn.configure(state="normal", text="🔍 Анализировать")
+        self.analyze_btn.configure(state="normal", text="🔍 Анализировать (F5)")
         self.start_btn.configure(state="normal")
 
         # Show results
