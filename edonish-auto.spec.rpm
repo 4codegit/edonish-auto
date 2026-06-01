@@ -1,5 +1,5 @@
 Name:           edonish-auto
-Version:        3.0.1
+Version:        3.0.2
 Release:        1%{?dist}
 Summary:        Automated grade management for edonish.tj electronic journal
 
@@ -62,6 +62,12 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
+* Mon Jun 02 2026 Kamar Narziev <kamar@edonish.tj> - 3.0.2-1
+- Fixed Flutter Engine bundling (flet pack replaces raw PyInstaller)
+- Fixed SSL certificate verification for Flutter Engine download
+- Replaced ft.app() with ft.run() (deprecated API)
+- Added FLET_VIEW_PATH auto-detection for PyInstaller bundles
+
 * Mon Jun 02 2025 Kamar Narziev <kamar@edonish.tj> - 3.0.0-1
 - Rewritten UI with Flet/Flutter — Material Design
 - Large, readable fonts
