@@ -19,3 +19,26 @@ Stage Summary:
 - Successfully tested: login, data loading, journal options, grade plan building, mark creation
 - All 4 quarters loaded, 5 classes, 29 students in 8Б
 - Grade plan for 8Б: 30 pending grades, 434 already filled
+
+---
+Task ID: 2
+Agent: Main
+Task: Add Docker support and prepare Git push for edonish-auto
+
+Work Log:
+- Created Dockerfile with multi-stage build (base → gui → cli → latest)
+- Created docker-compose.yml with CLI (default) and GUI (--profile gui) services
+- Created main_cli.py: full headless CLI with ANSI colors, progress bars, journal viewer
+- Created .dockerignore and .gitignore
+- Created .env.example with all environment variables
+- Created Makefile with convenience commands
+- Updated README.md with comprehensive Docker instructions
+- Updated requirements.txt (removed unnecessary concurrent-futures)
+- Committed to both local edonish-auto repo and main workspace repo
+- Docker not available in environment for test build
+
+Stage Summary:
+- Project fully Docker-ready at /home/z/my-project/download/edonish-auto/
+- 14 files total in edonish-auto project
+- Two git repos: standalone at edonish-auto/.git and workspace at /home/z/my-project/.git
+- No remote configured — user needs to add GitHub/GitLab remote URL
