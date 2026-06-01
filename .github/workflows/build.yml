@@ -91,20 +91,43 @@ jobs:
       - name: Verify Tkinter works
         run: python -c "import tkinter; import customtkinter; print('OK')"
 
-      - name: Build GUI binary (with --collect-all for tkinter)
+      - name: Build GUI binary (PyInstaller onefile)
         run: |
-          python -m PyInstaller edonish-auto.spec --clean --noconfirm \
-            --collect-all tkinter \
-            --collect-all customtkinter
+          python -m PyInstaller --clean --noconfirm \
+            --onefile \
+            --name edonish-auto \
+            --windowed \
+            --hidden-import=customtkinter \
+            --hidden-import=tkinter \
+            --hidden-import=tkinter.filedialog \
+            --hidden-import=tkinter.messagebox \
+            --hidden-import=tkinter.font \
+            --hidden-import=tkinter.ttk \
+            --hidden-import=_tkinter \
+            --hidden-import=requests \
+            --hidden-import=urllib3 \
+            --hidden-import=certifi \
+            --hidden-import=darkdetect \
+            --hidden-import=packaging \
+            --collect-data customtkinter \
+            --collect-data tkinter \
+            main.py
 
       - name: Build CLI binary
-        run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
+        run: |
+          python -m PyInstaller --clean --noconfirm \
+            --onefile \
+            --name edonish-auto-cli \
+            --hidden-import=requests \
+            --hidden-import=urllib3 \
+            --hidden-import=certifi \
+            main_cli.py
 
       - name: Move binaries to dist/linux
         run: |
           mkdir -p dist/linux
-          mv dist/edonish-auto dist/linux/ 2>/dev/null || true
-          mv dist/edonish-auto-cli dist/linux/ 2>/dev/null || true
+          mv dist/edonish-auto dist/linux/
+          mv dist/edonish-auto-cli dist/linux/
           chmod +x dist/linux/*
 
       - name: Build .deb package
@@ -144,21 +167,44 @@ jobs:
       - name: Verify Tkinter works
         run: python -c "import tkinter; import customtkinter; print('OK')"
 
-      - name: Build macOS app bundle
+      - name: Build macOS .app bundle
         run: |
-          python -m PyInstaller edonish-auto.spec --clean --noconfirm \
-            --collect-all tkinter \
-            --collect-all customtkinter
+          python -m PyInstaller --clean --noconfirm \
+            --name edonish-auto \
+            --windowed \
+            --hidden-import=customtkinter \
+            --hidden-import=tkinter \
+            --hidden-import=tkinter.filedialog \
+            --hidden-import=tkinter.messagebox \
+            --hidden-import=tkinter.font \
+            --hidden-import=tkinter.ttk \
+            --hidden-import=_tkinter \
+            --hidden-import=requests \
+            --hidden-import=urllib3 \
+            --hidden-import=certifi \
+            --hidden-import=darkdetect \
+            --hidden-import=packaging \
+            --collect-data customtkinter \
+            --collect-data tkinter \
+            --osx-bundle-identifier tj.edonish.auto \
+            main.py
 
       - name: Build CLI binary
-        run: python -m PyInstaller edonish-auto-cli.spec --clean --noconfirm
+        run: |
+          python -m PyInstaller --clean --noconfirm \
+            --onefile \
+            --name edonish-auto-cli \
+            --hidden-import=requests \
+            --hidden-import=urllib3 \
+            --hidden-import=certifi \
+            main_cli.py
 
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
           cp dist/edonish-auto-cli dist/dmg/
           hdiutil create -volname "eDonish Auto" \
-            -srcfolder "dist/eDonish Auto.app" \
+            -srcfolder "dist/edonish-auto.app" \
             -ov -format UDZO \
             "dist/dmg/edonish-auto-${{ env.APP_VERSION }}.dmg"
 
