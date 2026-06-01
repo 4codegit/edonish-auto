@@ -18,14 +18,13 @@ import flet as ft
 from flet import (
     AppBar, Icon, Icons, NavigationRail, NavigationRailDestination,
     NavigationRailLabelType, Page, Text, TextField, ElevatedButton,
-    OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
+    OutlinedButton, Checkbox, Dropdown, dropdown,
     ProgressRing, ProgressBar, Container, Card, Column, Row,
-    Tabs, Tab, ListView, Divider, SnackBar, AlertDialog, FontWeight,
-    MainAxisAlignment, CrossAxisAlignment, TextAlign, padding, margin,
-    border_radius, Border, BorderSide, BoxShadow, ThemeMode,
-    Switch, FilledButton, FloatingActionButton, Badge, Tooltip,
-    ButtonStyle, MaterialState, ControlState, VerticalDivider,
-    AlertDialog, MatplotlibChart, colors, ScrollMode, AutoScroll,
+    Divider, SnackBar, AlertDialog, FontWeight,
+    MainAxisAlignment, CrossAxisAlignment, TextAlign,
+    Border, BorderSide, ThemeMode,
+    FilledButton, ButtonStyle, VerticalDivider,
+    ScrollMode,
 )
 
 from config import (
@@ -144,10 +143,9 @@ class EdonishAutoApp:
 
         card = Card(
             elevation=8,
-            surface_tint_color=ft.Colors.BLUE_50,
             content=Container(
                 width=460,
-                padding=padding.all(40),
+                padding=ft.Padding(40),
                 content=Column(
                     horizontal_alignment=CrossAxisAlignment.CENTER,
                     controls=[
@@ -174,7 +172,7 @@ class EdonishAutoApp:
         self.page.add(
             Container(
                 expand=True,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 content=card,
             )
         )
@@ -250,7 +248,7 @@ class EdonishAutoApp:
                         Text(name, size=14, weight=FontWeight.W_500),
                         Text(school_info, size=12, color=ft.Colors.GREY_500),
                     ], spacing=8),
-                    padding=padding.only(right=16),
+                    padding=ft.Padding(right=16),
                 ),
                 IconButton(
                     icon=Icons.DARK_MODE_OUTLINED,
@@ -287,9 +285,9 @@ class EdonishAutoApp:
         self.page.overlay.append(
             Container(
                 content=self.status_text,
-                padding=padding.symmetric(horizontal=16, vertical=6),
-                bgcolor=ft.Colors.SURFACE_VARIANT,
-                border=border.only(top=BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                padding=ft.Padding(left=16, right=16, top=6, bottom=6),
+                bgcolor=ft.Colors.SURFACE_CONTAINER,
+                border=ft.Border(top=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
                 left=0, right=0, bottom=0,
             )
         )
@@ -376,7 +374,7 @@ class EdonishAutoApp:
         settings_card = Card(
             elevation=2,
             content=Container(
-                padding=padding.all(24),
+                padding=ft.Padding(24),
                 content=Column(
                     controls=[
                         Row([
@@ -405,7 +403,7 @@ class EdonishAutoApp:
             style=ButtonStyle(
                 text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
-                padding=padding.symmetric(horizontal=24, vertical=14),
+                padding=ft.Padding(left=24, right=24, top=14, bottom=14),
             ),
             on_click=lambda _: self._on_analyze(),
         )
@@ -415,7 +413,7 @@ class EdonishAutoApp:
             style=ButtonStyle(
                 text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
-                padding=padding.symmetric(horizontal=24, vertical=14),
+                padding=ft.Padding(left=24, right=24, top=14, bottom=14),
                 bgcolor=ft.Colors.GREEN_600,
             ),
             on_click=lambda _: self._on_start(),
@@ -427,7 +425,7 @@ class EdonishAutoApp:
             style=ButtonStyle(
                 text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
-                padding=padding.symmetric(horizontal=24, vertical=14),
+                padding=ft.Padding(left=24, right=24, top=14, bottom=14),
                 color=ft.Colors.RED_600,
             ),
             on_click=lambda _: self._on_stop(),
@@ -437,7 +435,7 @@ class EdonishAutoApp:
         action_card = Card(
             elevation=2,
             content=Container(
-                padding=padding.all(20),
+                padding=ft.Padding(20),
                 content=Row([
                     self.analyze_btn,
                     Container(width=12),
@@ -456,7 +454,7 @@ class EdonishAutoApp:
         progress_card = Card(
             elevation=2,
             content=Container(
-                padding=padding.all(24),
+                padding=ft.Padding(24),
                 content=Column([
                     self.progress_label,
                     Container(height=8),
@@ -479,7 +477,7 @@ class EdonishAutoApp:
             elevation=2,
             expand=True,
             content=Container(
-                padding=padding.all(24),
+                padding=ft.Padding(24),
                 expand=True,
                 content=Column([
                     Row([
@@ -502,7 +500,7 @@ class EdonishAutoApp:
         self.auto_grade_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
-            padding=padding.all(20),
+            padding=ft.Padding(20),
             controls=[
                 settings_card,
                 Container(height=12),
@@ -559,12 +557,12 @@ class EdonishAutoApp:
         self.journal_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
-            padding=padding.all(20),
+            padding=ft.Padding(20),
             controls=[
                 Card(
                     elevation=2,
                     content=Container(
-                        padding=padding.all(24),
+                        padding=ft.Padding(24),
                         content=Column([
                             Row([
                                 Icon(Icons.MENU_BOOK, size=24, color=ft.Colors.BLUE_600),
@@ -588,7 +586,7 @@ class EdonishAutoApp:
                     elevation=2,
                     expand=True,
                     content=Container(
-                        padding=padding.all(24),
+                        padding=ft.Padding(24),
                         expand=True,
                         content=Column(
                             [self.journal_text],
@@ -624,7 +622,7 @@ class EdonishAutoApp:
 
         self.logs_page = Column(
             expand=True,
-            padding=padding.all(20),
+            padding=ft.Padding(20),
             controls=[
                 Row([
                     Icon(Icons.TERMINAL, size=24, color=ft.Colors.BLUE_600),
@@ -637,7 +635,7 @@ class EdonishAutoApp:
                     elevation=2,
                     expand=True,
                     content=Container(
-                        padding=padding.all(16),
+                        padding=ft.Padding(16),
                         expand=True,
                         content=self.logs_list,
                     ),
