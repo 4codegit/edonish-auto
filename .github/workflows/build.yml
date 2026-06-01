@@ -39,6 +39,7 @@ jobs:
 
       - name: Build GUI executable with flet pack
         run: |
+          $certifiDir = python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))"
           flet pack main.py --name edonish-auto `
             --hidden-import requests `
             --hidden-import urllib3 `
@@ -48,7 +49,7 @@ jobs:
             --hidden-import idna `
             --hidden-import darkdetect `
             --hidden-import packaging `
-            --pyinstaller-build-args --collect-all certifi
+            --add-data "${certifiDir}:certifi"
         shell: pwsh
 
       - name: Build CLI executable
@@ -109,13 +110,14 @@ jobs:
 
       - name: Build GUI binary (flet pack)
         run: |
+          CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
           flet pack main.py --name edonish-auto \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --pyinstaller-build-args --collect-all certifi
+            --add-data "${CERTIFI_DIR}:certifi"
 
       - name: Build CLI binary
         run: |
@@ -170,6 +172,7 @@ jobs:
 
       - name: Build macOS .app bundle (flet pack)
         run: |
+          CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
           flet pack main.py --name edonish-auto \
             --bundle-id tj.edonish.auto \
             --hidden-import requests \
@@ -177,7 +180,7 @@ jobs:
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --pyinstaller-build-args --collect-all certifi
+            --add-data "${CERTIFI_DIR}:certifi"
 
       - name: Build CLI binary
         run: |
