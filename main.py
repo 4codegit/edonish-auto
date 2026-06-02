@@ -56,7 +56,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import flet as ft
 from flet import (
     AppBar, Icon, Icons, IconButton, NavigationRail, NavigationRailDestination,
-    NavigationRailLabelType, Page, Text, TextField, ElevatedButton,
+    NavigationRailLabelType, Page, Text, TextField,
     OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
     ProgressRing, ProgressBar, Container, Card, Column, Row,
     Tabs, Tab, ListView, Divider, SnackBar, AlertDialog, FontWeight,
@@ -508,7 +508,7 @@ class EdonishAutoApp:
         )
 
         # ── Action buttons ──────────────────────────────────────────
-        self.analyze_btn = ElevatedButton(
+        self.analyze_btn = ft.Button(
             content=ft.Row([
                 ft.Icon(Icons.SEARCH, size=18),
                 ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
@@ -545,7 +545,7 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_stop(),
             disabled=True,
         )
-        self.signature_btn = ElevatedButton(
+        self.signature_btn = ft.Button(
             content=ft.Row([
                 ft.Icon(Icons.DRAW, size=18),
                 ft.Text("Подпись", size=15, weight=FontWeight.W_600),
@@ -680,8 +680,8 @@ class EdonishAutoApp:
             text_size=15,
             options=[dropdown.Option("Все классы")],
             value="Все классы",
-            on_change=self._on_journal_class_change,
         )
+        self.journal_class_dropdown.on_change = self._on_journal_class_change
         self.journal_subject_dropdown = Dropdown(
             label="Предмет",
             width=250,
