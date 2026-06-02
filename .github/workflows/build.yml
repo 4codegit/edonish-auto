@@ -57,7 +57,7 @@ jobs:
             --hidden-import darkdetect `
             --hidden-import packaging `
             --add-data "${certifiDir}:certifi" `
-            --pyinstaller-build-args "--upx-dir $upxDir --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
+            --pyinstaller-build-args --upx-dir $upxDir --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
         shell: pwsh
 
       - name: Prepare dist directory
@@ -128,7 +128,7 @@ jobs:
             --hidden-import darkdetect \
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi" \
-            --pyinstaller-build-args "--upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
+            --pyinstaller-build-args --upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
 
       - name: Move binary to dist/linux and report size
         run: |
@@ -187,7 +187,7 @@ jobs:
             --hidden-import darkdetect \
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi" \
-            --pyinstaller-build-args "--upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
+            --pyinstaller-build-args --upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
 
       - name: Free disk space and package macOS app
         run: |
