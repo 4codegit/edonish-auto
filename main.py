@@ -259,6 +259,16 @@ class EdonishAutoApp:
                 else:
                     self._move_to_cell(row, col + 1)
                 return
+            elif e.key == "Enter":
+                # Enter on a cell — submit and move to next
+                cell = self._grade_cells.get((row, col))
+                if cell:
+                    val = cell.value
+                    if val and val.strip() and val.strip().isdigit():
+                        grade = int(val.strip())
+                        if MIN_GRADE <= grade <= MAX_GRADE:
+                            self._set_cell_grade(row, col, grade)
+                return
 
         # Global shortcuts
         if e.key == "Delete" and not self._selected_cell:
@@ -668,20 +678,23 @@ class EdonishAutoApp:
             label="Класс",
             width=200,
             text_size=15,
-            options=[dropdown.Option("Выберите...")],
+            options=[dropdown.Option("Все классы")],
+            value="Все классы",
+            on_change=self._on_journal_class_change,
         )
         self.journal_subject_dropdown = Dropdown(
             label="Предмет",
             width=250,
             text_size=15,
-            options=[dropdown.Option("Выберите...")],
+            options=[dropdown.Option("Все предметы")],
+            value="Все предметы",
         )
-        self.journal_subject_dropdown.on_change = self._on_journal_class_change
         self.journal_quarter_dropdown = Dropdown(
             label="Четверть",
             width=200,
             text_size=15,
-            options=[dropdown.Option("Выберите...")],
+            options=[dropdown.Option("Все четверти")],
+            value="Все четверти",
         )
         self.journal_load_btn = FilledButton(
             content=ft.Row([
@@ -749,13 +762,15 @@ class EdonishAutoApp:
                             Container(height=16),
                             Row([
                                 self.journal_class_dropdown,
-                                Container(width=16),
+                                Container(width=12),
                                 self.journal_subject_dropdown,
-                                Container(width=16),
+                                Container(width=12),
                                 self.journal_quarter_dropdown,
-                                Container(width=16),
+                            ], alignment=MainAxisAlignment.START, wrap=True),
+                            Container(height=12),
+                            Row([
                                 self.journal_load_btn,
-                                Container(width=16),
+                                Container(width=12),
                                 self.journal_clear_btn,
                             ], alignment=MainAxisAlignment.START),
                         ]),
@@ -971,7 +986,7 @@ class EdonishAutoApp:
         self.journal_class_dropdown.options = class_options
 
         subject_options = [dropdown.Option("Все предметы")] + [
-            dropdown.Option(s["name"]) for s in self.teacher_subjects
+            dropdown.Option(s["name"]) for s in sorted(self.teacher_subjects, key=lambda x: x["name"])
         ]
         self.subject_dropdown.options = subject_options
         self.journal_subject_dropdown.options = subject_options
@@ -997,6 +1012,7 @@ class EdonishAutoApp:
             pass
 
     def _on_journal_class_change(self, e):
+        """Filter subjects when class changes in the journal page."""
         if not self.journal_options:
             return
         value = e.control.value
@@ -1006,9 +1022,14 @@ class EdonishAutoApp:
             if gname == value or value == "Все классы":
                 for s in g.get("subjects", []):
                     subjects.append(s["subjectName"])
-        subjects = list(set(subjects))
-        self.journal_subject_dropdown.options = [dropdown.Option(s) for s in subjects]
-        self.page.update()
+        subjects = sorted(list(set(subjects)))
+        subject_options = [dropdown.Option("Все предметы")] + [dropdown.Option(s) for s in subjects]
+        self.journal_subject_dropdown.options = subject_options
+        self.journal_subject_dropdown.value = "Все предметы"
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     # ════════════════════════════════════════════════════════════════
     #  QUARTER AUTO-DETECTION
@@ -1307,7 +1328,12 @@ class EdonishAutoApp:
         subject_name = self.journal_subject_dropdown.value
         quarter_name = self.journal_quarter_dropdown.value
 
-        if not class_name or class_name in ("Выберите...", ""):
+        if not class_name or class_name in ("", "Все классы"):
+            self._show_snackbar("Выберите конкретный класс для загрузки журнала!")
+            return
+
+        if not subject_name or subject_name in ("", ):
+            self._show_snackbar("Выберите предмет!")
             return
 
         group_id = None
@@ -1610,21 +1636,41 @@ class EdonishAutoApp:
     def _on_cell_change(self, row, col, e):
         """Handle typing in a cell — auto-submit if valid grade digit entered."""
         val = e.control.value
-        if val and val.strip():
-            digit = val.strip()
-            if digit.isdigit():
-                grade = int(digit)
-                if MIN_GRADE <= grade <= MAX_GRADE:
-                    # Valid grade — submit it
-                    self._set_cell_grade(row, col, grade)
-                elif grade > MAX_GRADE:
-                    # Too high — clamp
-                    e.control.value = ""
-                    self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
-                    try:
-                        self.page.update()
-                    except Exception:
-                        pass
+        if not val or not val.strip():
+            return
+        digit = val.strip()
+        if not digit.isdigit():
+            e.control.value = self._grade_data.get((row, col), {}).get("current_value", "")
+            try:
+                self.page.update()
+            except Exception:
+                pass
+            return
+        grade = int(digit)
+        if MIN_GRADE <= grade <= MAX_GRADE:
+            # Valid grade — submit it after short delay to allow full number entry
+            if grade == 1 and MAX_GRADE >= 10:
+                # Could be "10" — wait for next digit
+                return
+            self._set_cell_grade(row, col, grade)
+        elif grade > MAX_GRADE:
+            # Too high — reject
+            e.control.value = ""
+            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
+            try:
+                self.page.update()
+            except Exception:
+                pass
+        elif grade < MIN_GRADE and digit == "1":
+            # Could be start of "10" — wait
+            pass
+        elif grade < MIN_GRADE:
+            e.control.value = ""
+            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
+            try:
+                self.page.update()
+            except Exception:
+                pass
 
     def _on_cell_submit(self, row, col, e):
         """Handle Enter key on a cell — submit the grade."""
