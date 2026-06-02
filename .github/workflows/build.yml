@@ -52,24 +52,10 @@ jobs:
             --add-data "${certifiDir}:certifi"
         shell: pwsh
 
-      - name: Build CLI executable
-        run: |
-          python -m PyInstaller --clean --noconfirm `
-            --onefile `
-            --name edonish-auto-cli `
-            --hidden-import=requests `
-            --hidden-import=urllib3 `
-            --hidden-import=urllib3.util `
-            --hidden-import=certifi `
-            --collect-all certifi `
-            main_cli.py
-        shell: pwsh
-
       - name: Prepare dist directory
         run: |
           mkdir dist\windows
           copy dist\edonish-auto.exe dist\windows\
-          copy dist\edonish-auto-cli.exe dist\windows\
         shell: pwsh
 
       - name: Install NSIS and build installer
@@ -127,23 +113,11 @@ jobs:
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi"
 
-      - name: Build CLI binary
-        run: |
-          python -m PyInstaller --clean --noconfirm \
-            --onefile \
-            --name edonish-auto-cli \
-            --hidden-import=requests \
-            --hidden-import=urllib3 \
-            --hidden-import=certifi \
-            --collect-all certifi \
-            main_cli.py
-
-      - name: Move binaries to dist/linux
+      - name: Move binary to dist/linux
         run: |
           mkdir -p dist/linux
           mv dist/edonish-auto dist/linux/
-          mv dist/edonish-auto-cli dist/linux/
-          chmod +x dist/linux/*
+          chmod +x dist/linux/edonish-auto
 
       - name: Build .deb package
         run: bash package.sh deb
@@ -156,7 +130,6 @@ jobs:
         with:
           name: edonish-auto-linux
           path: |
-            dist/linux/
             dist/deb/
             dist/rpm/
 
@@ -190,17 +163,6 @@ jobs:
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi"
 
-      - name: Build CLI binary
-        run: |
-          python -m PyInstaller --clean --noconfirm \
-            --onefile \
-            --name edonish-auto-cli \
-            --hidden-import=requests \
-            --hidden-import=urllib3 \
-            --hidden-import=certifi \
-            --collect-all certifi \
-            main_cli.py
-
       - name: Free disk space and package macOS app
         run: |
           # Remove build artifacts to free disk space
@@ -211,7 +173,6 @@ jobs:
 
           # Create ZIP archive instead of .dmg (requires less disk space)
           mkdir -p dist/dmg
-          cp dist/edonish-auto-cli dist/dmg/
           cd dist
           zip -r dmg/edonish-auto-${{ env.APP_VERSION }}-macos.zip edonish-auto.app
           cd ..
@@ -261,14 +222,6 @@ jobs:
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
 
-            ### CLI режим (Windows):
-            После установки CLI доступен в папке программы или через меню Пуск
-
-            ### CLI режим (Linux/macOS):
-            ```bash
-            edonish-auto-cli --login YOUR_LOGIN --password YOUR_PASSWORD
-            ```
-
             ### Важно для Windows:
             Если .exe не запускается из-за ошибки DLL, установите:
             [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
@@ -277,9 +230,6 @@ jobs:
             release-artifacts/**/*.exe
             release-artifacts/**/*.rpm
             release-artifacts/**/*.deb
-            release-artifacts/**/*.dmg
             release-artifacts/**/*.zip
-            release-artifacts/**/edonish-auto
-            release-artifacts/**/edonish-auto-cli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

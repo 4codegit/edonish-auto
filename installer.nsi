@@ -6,7 +6,6 @@
 !define APPNAME "eDonish Auto"
 !define APPVERSION "3.0.2"
 !define APPEXE "edonish-auto.exe"
-!define CLIEXE "edonish-auto-cli.exe"
 !define COMPANY "Edonish Auto Team"
 
 ; Modern UI
@@ -35,9 +34,8 @@ Section "Core Files" SecCore
     SectionIn RO
     SetOutPath $INSTDIR
 
-    ; Main executables
+    ; Main executable
     File "dist\windows\${APPEXE}"
-    File "dist\windows\${CLIEXE}"
 
     ; Create directories
     CreateDirectory "$INSTDIR\logs"
@@ -49,7 +47,6 @@ Section "Core Files" SecCore
     ; Start Menu shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"
     CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\${APPEXE}"
-    CreateShortCut "$SMPROGRAMS\${APPNAME}\CLI Mode.lnk" "$INSTDIR\${CLIEXE}"
     CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
     ; Write uninstaller
@@ -73,7 +70,6 @@ SectionEnd
 Section "Uninstall"
     ; Remove files
     Delete "$INSTDIR\${APPEXE}"
-    Delete "$INSTDIR\${CLIEXE}"
     Delete "$INSTDIR\uninstall.exe"
     RMDir /r "$INSTDIR\logs"
     RMDir /r "$INSTDIR\output"

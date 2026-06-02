@@ -36,7 +36,6 @@ build_rpm() {
     local STAGING="$RPMBUILD/staging/${APP_NAME}-${VERSION}"
     mkdir -p "$STAGING/dist/linux"
     cp dist/linux/edonish-auto "$STAGING/dist/linux/"
-    cp dist/linux/edonish-auto-cli "$STAGING/dist/linux/"
     cp config.py api_client.py grade_engine.py "$STAGING/"
     
     cd "$RPMBUILD/staging"
@@ -75,14 +74,10 @@ build_deb() {
     mkdir -p "$DEB_DIR/usr/share/applications"
     mkdir -p "$DEB_DIR/usr/share/doc/$APP_NAME"
 
-    # Copy binaries
+    # Copy binary
     if [[ -f "$SCRIPT_DIR/dist/linux/edonish-auto" ]]; then
         cp "$SCRIPT_DIR/dist/linux/edonish-auto" "$DEB_DIR/usr/bin/"
         chmod 755 "$DEB_DIR/usr/bin/edonish-auto"
-    fi
-    if [[ -f "$SCRIPT_DIR/dist/linux/edonish-auto-cli" ]]; then
-        cp "$SCRIPT_DIR/dist/linux/edonish-auto-cli" "$DEB_DIR/usr/bin/"
-        chmod 755 "$DEB_DIR/usr/bin/edonish-auto-cli"
     fi
 
     # Copy shared files

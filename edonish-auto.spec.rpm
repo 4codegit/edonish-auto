@@ -21,7 +21,6 @@ Features:
 - Parallel grade filling with multiple workers
 - Quarter, semester, and year marks automation
 - Journal viewer with formatted tables
-- CLI mode for Docker/server deployments
 
 %prep
 %setup -q
@@ -32,9 +31,8 @@ mkdir -p %{buildroot}%{_datadir}/%{name}
 mkdir -p %{buildroot}%{_datadir}/applications
 mkdir -p %{buildroot}%{_datadir}/icons/hicolor/256x256/apps
 
-# Install binaries
+# Install binary
 install -m 755 dist/linux/edonish-auto %{buildroot}%{_bindir}/edonish-auto
-install -m 755 dist/linux/edonish-auto-cli %{buildroot}%{_bindir}/edonish-auto-cli
 
 # Install shared files
 install -m 644 config.py %{buildroot}%{_datadir}/%{name}/
@@ -57,7 +55,6 @@ EOF
 
 %files
 %{_bindir}/edonish-auto
-%{_bindir}/edonish-auto-cli
 %{_datadir}/%{name}/*
 %{_datadir}/applications/%{name}.desktop
 
@@ -73,14 +70,3 @@ EOF
 - Large, readable fonts
 - Dark/Light theme toggle
 - NavigationRail sidebar
-
-* Mon Jun 02 2025 Kamar Narziev <kamar@edonish.tj> - 2.1.1-1
-- Fixed Windows api-ms-win-core-path-l1-1-0.dll error
-- Switched to Python 3.11 for Windows build
-- Added --collect-all flags for proper DLL bundling
-
-* Sun Jun 01 2025 Kamar Narziev <kamar@edonish.tj> - 2.0.0-1
-- Initial RPM package
-- GUI and CLI modes
-- Docker support
-- Parallel grade engine
