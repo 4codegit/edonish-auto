@@ -47,9 +47,9 @@ LANG_RU = 2  # Русский
 LANG_EN = 3  # English
 
 # Grade settings
-MIN_GRADE = 8
+MIN_GRADE = 3
 MAX_GRADE = 10
-DEFAULT_GRADE_RANGE = (8, 10)
+DEFAULT_GRADE_RANGE = (3, 10)
 
 # Worker settings
 DEFAULT_WORKERS = 4
@@ -57,7 +57,7 @@ DEFAULT_BATCH_SIZE = 4
 
 # App settings
 APP_NAME = "eDonish Auto"
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.2.0"
 APP_AUTHOR = "Edonish Auto Team"
 
 # Session file

@@ -316,6 +316,27 @@ class EdonishAPI:
             params={"school_id": self.school_id, "lang": lang},
         )
 
+    def create_comment(
+        self,
+        student_id: int,
+        assignment_date_id: str,
+        comment: str,
+        quarter_property_id: int = None,
+    ) -> Optional[Dict]:
+        """Create a comment/signature for a student on a specific date."""
+        body = {
+            "group_subgroup_student_id": student_id,
+            "schedule_date_id": assignment_date_id,
+            "quarter_property_id": quarter_property_id or 0,
+            "comment": comment,
+        }
+        return self._request(
+            "POST",
+            self._url(JOURNAL_COMMENT),
+            params={"school_id": self.school_id},
+            json=body,
+        )
+
     def get_subgroups(self, group_id: int, lang: int = LANG_RU) -> List[Dict]:
         """Get subgroups for a specific group."""
         return self._request(

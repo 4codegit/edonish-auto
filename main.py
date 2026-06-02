@@ -411,6 +411,18 @@ class EdonishAutoApp:
             label="Четвертные оценки",
             value=True,
         )
+        self.signature_check = Checkbox(
+            label="Добавить подпись",
+            value=False,
+            on_change=self._on_signature_check_change,
+        )
+        self.signature_field = TextField(
+            label="Текст подписи",
+            width=200,
+            text_size=15,
+            value="Подпись",
+            visible=False,
+        )
 
         settings_card = Card(
             elevation=2,
@@ -429,7 +441,7 @@ class EdonishAutoApp:
                             Column([self.subject_dropdown, Container(height=12),
                                 Row([self.min_grade_field, Text("—", size=20, weight=FontWeight.BOLD), self.max_grade_field], alignment=MainAxisAlignment.START, spacing=8),
                                 Container(height=12),
-                                Column([self.fill_empty_check, self.quarter_marks_check]),
+                                Column([self.fill_empty_check, self.quarter_marks_check, self.signature_check, self.signature_field]),
                             ]),
                         ], alignment=MainAxisAlignment.START),
                     ],
@@ -475,6 +487,20 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_stop(),
             disabled=True,
         )
+        self.signature_btn = ElevatedButton(
+            content=ft.Row([
+                ft.Icon(Icons.DRAW, size=18),
+                ft.Text("Подпись", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=14,
+                bgcolor=ft.Colors.PURPLE_100,
+                color=ft.Colors.PURPLE_700,
+            ),
+            on_click=lambda _: self._on_sign(),
+            disabled=True,
+        )
 
         action_card = Card(
             elevation=2,
@@ -486,6 +512,8 @@ class EdonishAutoApp:
                     self.start_btn,
                     Container(width=12),
                     self.stop_btn,
+                    Container(width=12),
+                    self.signature_btn,
                 ], alignment=MainAxisAlignment.START),
             ),
         )
@@ -843,6 +871,13 @@ class EdonishAutoApp:
         self.quarter_dropdown.options = quarter_options
         self.journal_quarter_dropdown.options = quarter_options
 
+        # Auto-detect current quarter based on date
+        current_quarter_name = self._detect_current_quarter()
+        if current_quarter_name:
+            self.quarter_dropdown.value = current_quarter_name
+            self.journal_quarter_dropdown.value = current_quarter_name
+            self._log_message(f"Автоопределение: текущая четверть — {current_quarter_name}")
+
         msg = f"Загружено: {len(self.groups_data)} классов, {len(self.teacher_subjects)} предметов"
         self._log_message(msg)
         try:
@@ -863,6 +898,106 @@ class EdonishAutoApp:
         subjects = list(set(subjects))
         self.journal_subject_dropdown.options = [dropdown.Option(s) for s in subjects]
         self.page.update()
+
+    # ════════════════════════════════════════════════════════════════
+    #  QUARTER AUTO-DETECTION
+    # ════════════════════════════════════════════════════════════════
+
+    def _detect_current_quarter(self) -> str:
+        """Auto-detect the current quarter based on today's date."""
+        today = datetime.now()
+        for q in self.quarters_data:
+            start = q.get("startDate", "")
+            end = q.get("endDate", "")
+            name = q.get("name", "")
+            if not start or not end:
+                continue
+            try:
+                start_dt = datetime.strptime(start[:10], "%Y-%m-%d")
+                end_dt = datetime.strptime(end[:10], "%Y-%m-%d")
+                if start_dt <= today <= end_dt:
+                    return name
+            except (ValueError, TypeError):
+                continue
+        # Fallback: determine quarter by month
+        month = today.month
+        if month in (9, 10, 11):
+            q_num = 1
+        elif month in (12, 1, 2):
+            q_num = 2
+        elif month in (3, 4, 5):
+            q_num = 3
+        else:
+            q_num = 4
+        for q in self.quarters_data:
+            name = q.get("name", "")
+            if str(q_num) in name:
+                return name
+        # Last resort: return first quarter name
+        if self.quarters_data:
+            return self.quarters_data[0].get("name", "")
+        return ""
+
+    # ════════════════════════════════════════════════════════════════
+    #  SIGNATURE FEATURE
+    # ════════════════════════════════════════════════════════════════
+
+    def _on_signature_check_change(self, e=None):
+        """Toggle signature field visibility."""
+        self.signature_field.visible = self.signature_check.value
+        try:
+            self.page.update()
+        except Exception:
+            pass
+
+    def _on_sign(self):
+        """Execute signature for all selected students."""
+        if not self.signature_check.value:
+            self._show_snackbar("Включите чекбокс 'Добавить подпись'!")
+            return
+
+        signature_text = self.signature_field.value or "Подпись"
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        if not groups or not subjects or not quarters:
+            self._show_snackbar("Выберите класс, предмет и четверть!")
+            return
+
+        self.signature_btn.disabled = True
+        self.start_btn.disabled = True
+        self.analyze_btn.disabled = True
+        self.stop_btn.disabled = False
+        self.progress_label.value = "Добавление подписей..."
+        self.page.update()
+
+        def run():
+            try:
+                self.engine.execute_signatures(
+                    groups=groups,
+                    subjects=subjects,
+                    quarters=quarters,
+                    signature_text=signature_text,
+                    fill_empty_only=self.fill_empty_check.value,
+                )
+            except Exception as e:
+                self._log_message(f"Ошибка подписей: {e}", "error")
+            finally:
+                self._on_sign_complete()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_sign_complete(self):
+        self.signature_btn.disabled = False
+        self.start_btn.disabled = False
+        self.stop_btn.disabled = True
+        self.analyze_btn.disabled = False
+        self.progress_label.value = "Подписи добавлены"
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     # ════════════════════════════════════════════════════════════════
     #  GRADE AUTOMATION
@@ -938,6 +1073,7 @@ class EdonishAutoApp:
         self.analyze_btn.disabled = False
         self.analyze_btn.content.value = "Анализировать"
         self.start_btn.disabled = False
+        self.signature_btn.disabled = False
 
         to_execute = sum(1 for t in plan.tasks if t.status == "pending")
 
@@ -1011,6 +1147,16 @@ class EdonishAutoApp:
                     )
                     if qplan.total_tasks > 0:
                         self.engine.execute_quarter_marks(qplan)
+                if self.signature_check.value:
+                    self._log_message("Добавление подписей...")
+                    signature_text = self.signature_field.value or "Подпись"
+                    self.engine.execute_signatures(
+                        groups=self._get_selected_groups(),
+                        subjects=self._get_selected_subjects(),
+                        quarters=self._get_selected_quarters(),
+                        signature_text=signature_text,
+                        fill_empty_only=self.fill_empty_check.value,
+                    )
 
             except Exception as e:
                 self._log_message(f"Критическая ошибка: {e}", "error")

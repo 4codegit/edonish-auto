@@ -11,6 +11,34 @@ from config import MIN_GRADE, MAX_GRADE, DEFAULT_WORKERS, DEFAULT_BATCH_SIZE
 logger = logging.getLogger("edonish_auto")
 
 
+def weighted_random_grade(min_grade: int = MIN_GRADE, max_grade: int = MAX_GRADE) -> int:
+    """
+    Generate a weighted random grade.
+    
+    Uses a bell-curve-like distribution centered around 7-9,
+    with lower probability for very low (3-4) or very high (10) grades.
+    This produces more realistic grade distributions.
+    """
+    weights = []
+    for g in range(min_grade, max_grade + 1):
+        if g <= 4:
+            w = 1   # rare low grades
+        elif g == 5:
+            w = 2
+        elif g == 6:
+            w = 3
+        elif g == 7:
+            w = 4
+        elif g == 8:
+            w = 5
+        elif g == 9:
+            w = 4
+        else:  # 10
+            w = 3  # rare perfect score
+        weights.append(w)
+    return random.choices(range(min_grade, max_grade + 1), weights=weights, k=1)[0]
+
+
 @dataclass
 class GradeTask:
     """Represents a single grade creation task."""
@@ -177,8 +205,8 @@ class GradeEngine:
                                 plan.skipped += 1
                                 continue
 
-                            # Generate random grade
-                            grade = random.randint(min_grade, max_grade)
+                            # Generate weighted random grade
+                            grade = weighted_random_grade(min_grade, max_grade)
                             task = GradeTask(
                                 student_id=student_id,
                                 student_name=student_name,
@@ -241,7 +269,7 @@ class GradeEngine:
                         if fill_empty_only and quarter_marks and quarter_marks[0].get("shortName"):
                             continue
 
-                        grade = random.randint(min_grade, max_grade)
+                        grade = weighted_random_grade(min_grade, max_grade)
                         task = GradeTask(
                             student_id=student_id,
                             student_name=student_name,
@@ -413,4 +441,134 @@ class GradeEngine:
 
         self._running = False
         self._log(f"🏁 Четвертные оценки: ✅ {completed}, ❌ {failed}")
+        return plan
+
+    def execute_signatures(
+        self,
+        groups: List[Dict],
+        subjects: List[Dict],
+        quarters: List[Dict],
+        signature_text: str = "",
+        fill_empty_only: bool = True,
+        task_delay: float = 0.2,
+    ) -> GradePlan:
+        """Add signatures/comments to students in the journal."""
+        self._running = True
+        self._stop_event.clear()
+        plan = GradePlan()
+        self._log("📋 Построение плана подписей...")
+
+        for group in groups:
+            group_id = group["id"]
+            group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
+
+            for subject in subjects:
+                subject_id = subject.get("subjectId", subject.get("id"))
+                subject_name = subject.get("subjectName", subject.get("name", ""))
+
+                for quarter in quarters:
+                    qprop_id = quarter["qpropId"]
+                    quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
+
+                    self._log(f"✍️ {group_name} | {subject_name} | {quarter_name}")
+
+                    try:
+                        dates_data = self.api.get_journal_dates(
+                            group_id=group_id,
+                            subject_id=subject_id,
+                            quarter_property_id=qprop_id,
+                        )
+                    except Exception as e:
+                        self._log(f"  ❌ Ошибка получения дат: {e}", "error")
+                        continue
+
+                    if not dates_data or not dates_data[0].get("days"):
+                        continue
+
+                    days = dates_data[0].get("days", [])
+
+                    try:
+                        students = self.api.get_journal_students(
+                            group_id=group_id,
+                            subject_id=subject_id,
+                            quarter_property_id=qprop_id,
+                        )
+                    except Exception as e:
+                        self._log(f"  ❌ Ошибка получения студентов: {e}", "error")
+                        continue
+
+                    if not students:
+                        continue
+
+                    for student in students:
+                        student_id = student["studentId"]
+                        student_name = f"{student.get('lastName', '')} {student.get('firstName', '')}"
+
+                        # Use the last available date for signature
+                        if days:
+                            last_day = days[-1]
+                            date_id = last_day["assignmentDateId"]
+                            date_str = last_day.get("assignmentDate", "")
+
+                            # Check if student already has a mark on this date
+                            if fill_empty_only:
+                                existing_marks = {}
+                                for mark in (student.get("subjectMarks") or []):
+                                    existing_marks[mark.get("assignmentDateId")] = mark
+                                if date_id in existing_marks:
+                                    continue
+
+                            task = GradeTask(
+                                student_id=student_id,
+                                student_name=student_name,
+                                assignment_date_id=date_id,
+                                date_str=date_str,
+                                quarter_property_id=qprop_id,
+                                mark=0,
+                                subject_name=subject_name,
+                                group_name=group_name,
+                            )
+                            plan.add_task(task)
+
+        self._log(f"✅ План подписей: {plan.total_tasks} учеников")
+
+        # Execute signatures
+        completed = 0
+        failed = 0
+        comment = signature_text or "Подпись"
+
+        for task in plan.tasks:
+            if self._stop_event.is_set():
+                break
+
+            task.status = "running"
+            try:
+                result = self.api.create_comment(
+                    student_id=task.student_id,
+                    assignment_date_id=task.assignment_date_id,
+                    comment=comment,
+                    quarter_property_id=task.quarter_property_id,
+                )
+                if result:
+                    task.status = "success"
+                    completed += 1
+                    plan.completed = completed
+                    self._log(f"  ✍️ {task.student_name} — подпись добавлена")
+                else:
+                    task.status = "error"
+                    failed += 1
+                    plan.failed = failed
+                    self._log(f"  ❌ {task.student_name}: ошибка подписи", "error")
+            except Exception as e:
+                task.status = "error"
+                task.error = str(e)
+                failed += 1
+                plan.failed = failed
+                self._log(f"  ❌ {task.student_name}: {e}", "error")
+
+            self._update_progress(plan)
+            time.sleep(task_delay)
+
+        self._running = False
+        self._log(f"🏁 Подписи: ✅ {completed}, ❌ {failed}")
         return plan
