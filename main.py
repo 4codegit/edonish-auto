@@ -210,7 +210,7 @@ class EdonishAutoApp:
         self.page.add(
             Container(
                 expand=True,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 content=card,
             )
         )
@@ -324,7 +324,7 @@ class EdonishAutoApp:
             Container(
                 content=self.status_text,
                 padding=6,
-                bgcolor=ft.Colors.SURFACE_VARIANT,
+                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border=Border(
                     top=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
                     right=BorderSide(0, ft.Colors.TRANSPARENT),
@@ -538,7 +538,6 @@ class EdonishAutoApp:
         self.auto_grade_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
-            padding=20,
             controls=[
                 settings_card,
                 Container(height=12),
@@ -549,6 +548,7 @@ class EdonishAutoApp:
                 results_card,
             ],
         )
+        self.auto_grade_page.padding = 20
 
     # ════════════════════════════════════════════════════════════════
     #  JOURNAL PAGE
@@ -567,8 +567,8 @@ class EdonishAutoApp:
             width=250,
             text_size=15,
             options=[dropdown.Option("Выберите...")],
-            on_change=self._on_journal_class_change,
         )
+        self.journal_subject_dropdown.on_change = self._on_journal_class_change
         self.journal_quarter_dropdown = Dropdown(
             label="Четверть",
             width=200,
@@ -594,7 +594,6 @@ class EdonishAutoApp:
         self.journal_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
-            padding=20,
             controls=[
                 Card(
                     elevation=2,
@@ -634,6 +633,7 @@ class EdonishAutoApp:
                 ),
             ],
         )
+        self.journal_page.padding = 20
 
     # ════════════════════════════════════════════════════════════════
     #  LOGS PAGE
@@ -658,7 +658,6 @@ class EdonishAutoApp:
 
         self.logs_page = Column(
             expand=True,
-            padding=20,
             controls=[
                 Row([
                     Icon(Icons.TERMINAL, size=24, color=ft.Colors.BLUE_600),
@@ -678,6 +677,7 @@ class EdonishAutoApp:
                 ),
             ],
         )
+        self.logs_page.padding = 20
 
     # ════════════════════════════════════════════════════════════════
     #  SESSION PERSISTENCE
