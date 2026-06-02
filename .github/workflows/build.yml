@@ -43,7 +43,7 @@ jobs:
           pip install flet flet-desktop requests pyinstaller
         shell: pwsh
 
-      - name: Build GUI executable with flet pack (UPX + exclude modules)
+      - name: Build GUI executable with flet pack
         run: |
           $certifiDir = python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))"
           $upxDir = (Get-Command upx).Source | Split-Path
@@ -56,8 +56,7 @@ jobs:
             --hidden-import idna `
             --hidden-import darkdetect `
             --hidden-import packaging `
-            --add-data "${certifiDir}:certifi" `
-            --pyinstaller-build-args --upx-dir $upxDir --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
+            --add-data "${certifiDir}:certifi"
         shell: pwsh
 
       - name: Prepare dist directory
@@ -87,7 +86,7 @@ jobs:
           path: dist/windows/
 
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Linux binary + .deb + .rpm (UPX)
+  # BUILD: Linux binary + .deb + .rpm
   # ═══════════════════════════════════════════════════════════════
   build-linux:
     runs-on: ubuntu-latest
@@ -99,7 +98,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system dependencies + UPX
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -108,27 +107,23 @@ jobs:
             libgtk-3-0 libgdk-pixbuf2.0-0 libgl1 \
             libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
             libatspi2.0-0 rpm dpkg-dev \
-            libgmp-dev libmpfr-dev libcairo2-dev \
-            upx-ucl
-          upx --version || true
+            libgmp-dev libmpfr-dev libcairo2-dev
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install flet flet-desktop requests pyinstaller
 
-      - name: Build GUI binary (flet pack + UPX + exclude modules)
+      - name: Build GUI binary with flet pack
         run: |
           CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
-          UPX_DIR=$(dirname $(which upx 2>/dev/null || echo "/usr/bin/upx"))
           flet pack main.py --name edonish-auto \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --add-data "${CERTIFI_DIR}:certifi" \
-            --pyinstaller-build-args --upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
+            --add-data "${CERTIFI_DIR}:certifi"
 
       - name: Move binary to dist/linux and report size
         run: |
@@ -153,7 +148,7 @@ jobs:
             dist/rpm/
 
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: macOS .app + .zip (UPX)
+  # BUILD: macOS .app + .zip
   # ═══════════════════════════════════════════════════════════════
   build-macos:
     runs-on: macos-latest
@@ -165,20 +160,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install UPX for macOS
-        run: |
-          brew install upx
-          upx --version || true
-
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install flet flet-desktop requests pyinstaller
 
-      - name: Build macOS .app bundle (flet pack + UPX + exclude modules)
+      - name: Build macOS .app bundle with flet pack
         run: |
           CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
-          UPX_DIR=$(dirname $(which upx 2>/dev/null || echo "/usr/local/bin/upx"))
           flet pack main.py --name edonish-auto \
             --bundle-id tj.edonish.auto \
             --hidden-import requests \
@@ -186,8 +175,7 @@ jobs:
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --add-data "${CERTIFI_DIR}:certifi" \
-            --pyinstaller-build-args --upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing 
+            --add-data "${CERTIFI_DIR}:certifi"
 
       - name: Free disk space and package macOS app
         run: |
@@ -241,10 +229,9 @@ jobs:
             Автоматизация электронного журнала edonish.tj
 
             ### Что нового:
-            - UPX-сжатие: размер бинарников уменьшен на 30-40%
-            - Исключены неиспользуемые модули Python (tkinter, unittest, xml.dom и др.)
             - Исправлены иконки на кнопках (Flet 0.85.2 content+icon совместимость)
             - Полная совместимость с Flet 0.85.2
+            - Исправлена сборка через GitHub Actions CI/CD
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-3.1.0-setup.exe`, запустите установщик
