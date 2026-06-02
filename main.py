@@ -162,7 +162,6 @@ class EdonishAutoApp:
         self.remember_check = Checkbox(
             label="Запомнить меня",
             value=False,
-            label_style=ft.TextStyle(size=14),
         )
         self.login_status_text = Text(
             "",
@@ -182,7 +181,6 @@ class EdonishAutoApp:
 
         card = Card(
             elevation=8,
-            surface_tint_color=ft.Colors.BLUE_50,
             content=Container(
                 width=460,
                 padding=40,
@@ -327,7 +325,12 @@ class EdonishAutoApp:
                 content=self.status_text,
                 padding=6,
                 bgcolor=ft.Colors.SURFACE_VARIANT,
-                border=Border(top=BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                border=Border(
+                    top=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    right=BorderSide(0, ft.Colors.TRANSPARENT),
+                    bottom=BorderSide(0, ft.Colors.TRANSPARENT),
+                    left=BorderSide(0, ft.Colors.TRANSPARENT),
+                ),
                 left=0, right=0, bottom=0,
             )
         )
@@ -403,12 +406,10 @@ class EdonishAutoApp:
         self.fill_empty_check = Checkbox(
             label="Только пустые ячейки",
             value=True,
-            label_style=ft.TextStyle(size=15),
         )
         self.quarter_marks_check = Checkbox(
             label="Четвертные оценки",
             value=True,
-            label_style=ft.TextStyle(size=15),
         )
 
         settings_card = Card(
@@ -725,7 +726,7 @@ class EdonishAutoApp:
             return
 
         self.login_btn.disabled = True
-        self.login_btn.text = "Вход..."
+        self.login_btn.content.value = "Вход..."
         self.login_status_text.value = "Подключение..."
         self.login_status_text.color = ft.Colors.GREY_600
         self.page.update()
@@ -750,7 +751,7 @@ class EdonishAutoApp:
 
     def _on_login_error(self, error_msg):
         self.login_btn.disabled = False
-        self.login_btn.text = "Войти"
+        self.login_btn.content.value = "Войти"
         self.login_status_text.value = error_msg
         self.login_status_text.color = ft.Colors.RED_400
         self.page.update()
@@ -889,7 +890,7 @@ class EdonishAutoApp:
 
     def _on_analyze(self):
         self.analyze_btn.disabled = True
-        self.analyze_btn.text = "Анализ..."
+        self.analyze_btn.content.value = "Анализ..."
         self.progress_bar.value = 0
         self.progress_label.value = "Анализ..."
         self.results_text.value = "Анализ журнала..."
@@ -918,14 +919,14 @@ class EdonishAutoApp:
             except Exception as e:
                 self._log_message(f"Ошибка анализа: {e}", "error")
                 self.analyze_btn.disabled = False
-                self.analyze_btn.text = "Анализировать"
+                self.analyze_btn.content.value = "Анализировать"
                 self.page.update()
 
         threading.Thread(target=analyze, daemon=True).start()
 
     def _on_analyze_complete(self, plan: GradePlan):
         self.analyze_btn.disabled = False
-        self.analyze_btn.text = "Анализировать"
+        self.analyze_btn.content.value = "Анализировать"
         self.start_btn.disabled = False
 
         to_execute = sum(1 for t in plan.tasks if t.status == "pending")
