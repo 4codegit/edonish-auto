@@ -1,5 +1,5 @@
 Name:           edonish-auto
-Version:        3.2.0
+Version:        3.3.0
 Release:        1%{?dist}
 Summary:        Automated grade management for edonish.tj electronic journal
 
@@ -59,7 +59,7 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
-* Mon Jun 02 2026 Kamar Narziev <kamar@edonish.tj> - 3.2.0-1
+* Mon Jun 02 2026 Kamar Narziev <kamar@edonish.tj> - 3.3.0-1
 - Fixed Flutter Engine bundling (flet pack replaces raw PyInstaller)
 - Fixed SSL certificate verification for Flutter Engine download
 - Replaced ft.app() with ft.run() (deprecated API)

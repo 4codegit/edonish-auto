@@ -225,6 +225,13 @@ class EdonishAutoApp:
         if e.key == "Enter" and e.ctrl:
             self._on_login()
 
+    def _on_dashboard_keyboard(self, e):
+        """Handle keyboard shortcuts on the dashboard."""
+        if e.key == "Delete":
+            self._on_delete_grades()
+        elif e.key == "F5":
+            self._on_analyze()
+
     # ════════════════════════════════════════════════════════════════
     #  DASHBOARD VIEW
     # ════════════════════════════════════════════════════════════════
@@ -322,8 +329,12 @@ class EdonishAutoApp:
         self.status_text = Text("Готов", size=13, color=ft.Colors.GREY_600)
         self.page.overlay.append(
             Container(
-                content=self.status_text,
-                padding=6,
+                content=Row([
+                    self.status_text,
+                    Container(expand=True),
+                    Text("Del: удалить  |  F5: анализировать", size=11, color=ft.Colors.GREY_400),
+                ]),
+                padding=ft.padding.only(left=12, top=6, right=12, bottom=6),
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border=Border(
                     top=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
@@ -334,6 +345,9 @@ class EdonishAutoApp:
                 left=0, right=0, bottom=0,
             )
         )
+
+        # Keyboard shortcuts
+        self.page.on_keyboard_event = self._on_dashboard_keyboard
         self.page.update()
 
     def _on_nav_change(self, e):
@@ -501,26 +515,48 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_sign(),
             disabled=True,
         )
+        self.delete_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.DELETE_FOREVER, size=18),
+                ft.Text("Удалить", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=14,
+                color=ft.Colors.RED_700,
+            ),
+            on_click=lambda _: self._on_delete_grades(),
+            tooltip="Удалить все оценки (Del)",
+        )
 
         action_card = Card(
             elevation=2,
             content=Container(
                 padding=20,
-                content=Row([
-                    self.analyze_btn,
-                    Container(width=12),
-                    self.start_btn,
-                    Container(width=12),
-                    self.stop_btn,
-                    Container(width=12),
-                    self.signature_btn,
-                ], alignment=MainAxisAlignment.START),
+                content=Column([
+                    Row([
+                        self.analyze_btn,
+                        Container(width=12),
+                        self.start_btn,
+                        Container(width=12),
+                        self.stop_btn,
+                        Container(width=12),
+                        self.signature_btn,
+                    ], alignment=MainAxisAlignment.START),
+                    Container(height=8),
+                    Row([
+                        self.delete_btn,
+                        Container(width=12),
+                        Text("Del — удалить оценки", size=12, color=ft.Colors.GREY_500),
+                    ], alignment=MainAxisAlignment.START),
+                ]),
             ),
         )
 
         # ── Progress ────────────────────────────────────────────────
         self.progress_label = Text("Готов к работе", size=16, weight=FontWeight.W_600)
-        self.progress_bar = ProgressBar(width=800, bar_height=8, color=ft.Colors.BLUE_600, bgcolor=ft.Colors.BLUE_100)
+        self.progress_pct = Text("0%", size=20, weight=FontWeight.BOLD, color=ft.Colors.BLUE_600)
+        self.progress_bar = ProgressBar(width=700, bar_height=10, color=ft.Colors.BLUE_600, bgcolor=ft.Colors.BLUE_100)
         self.stats_label = Text("", size=14, color=ft.Colors.GREY_600)
 
         progress_card = Card(
@@ -528,7 +564,11 @@ class EdonishAutoApp:
             content=Container(
                 padding=24,
                 content=Column([
-                    self.progress_label,
+                    Row([
+                        self.progress_label,
+                        Container(expand=True),
+                        self.progress_pct,
+                    ]),
                     Container(height=8),
                     self.progress_bar,
                     Container(height=4),
@@ -620,6 +660,8 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_load_journal(),
         )
 
+        self.journal_student_count = Text("", size=13, color=ft.Colors.GREY_500)
+
         self.journal_text = Text(
             "Выберите класс, предмет и четверть для просмотра журнала",
             size=14,
@@ -639,6 +681,8 @@ class EdonishAutoApp:
                             Row([
                                 Icon(Icons.MENU_BOOK, size=24, color=ft.Colors.BLUE_600),
                                 Text("Просмотр журнала", size=20, weight=FontWeight.W_600),
+                                Container(expand=True),
+                                self.journal_student_count,
                             ], spacing=10),
                             Container(height=16),
                             Row([
@@ -1254,13 +1298,18 @@ class EdonishAutoApp:
         if dates_data and dates_data[0].get("days"):
             dates = dates_data[0]["days"]
 
+        self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
+
         header = f"{'N':<4} {'Ученик':<30}"
         for d in dates:
             date_str = d.get("assignmentDate", "")[5:]
             header += f" {date_str:>6}"
         header += f"  {'Чтв':>4}  {'Смст':>4}  {'Год':>4}"
         lines.append(header)
-        lines.append("-" * len(header))
+        lines.append("\u2500" * len(header))
+
+        total_marks = 0
+        empty_cells = 0
 
         for i, s in enumerate(students, 1):
             name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
@@ -1270,6 +1319,10 @@ class EdonishAutoApp:
                 marks_by_date[m["assignmentDateId"]] = m.get("shortName", "")
             for d in dates:
                 mark = marks_by_date.get(d["assignmentDateId"], "")
+                if mark:
+                    total_marks += 1
+                else:
+                    empty_cells += 1
                 row += f" {mark:>6}"
             qm = s.get("quarterMark", [{}])
             row += f"  {qm[0].get('shortName', ''):>4}" if qm else f"  {'':>4}"
@@ -1279,8 +1332,11 @@ class EdonishAutoApp:
             row += f"  {ym[0].get('shortName', ''):>4}" if ym else f"  {'':>4}"
             lines.append(row)
 
+        lines.append("")
+        lines.append(f"  Заполнено: {total_marks} | Пустых: {empty_cells} | Заполненность: {(total_marks/(total_marks+empty_cells)*100) if (total_marks+empty_cells)>0 else 0:.0f}%")
+
         self.journal_text.value = "\n".join(lines)
-        self._log_message("Журнал загружен")
+        self._log_message(f"Журнал загружен: {total_marks} оценок, {empty_cells} пустых")
         try:
             self.page.update()
         except Exception:
@@ -1296,8 +1352,9 @@ class EdonishAutoApp:
             done = plan.completed + plan.failed
             pct = done / total
             self.progress_bar.value = pct
-            self.progress_label.value = f"Прогресс: {done}/{total} ({pct * 100:.1f}%)"
-            self.stats_label.value = f"Успешно: {plan.completed}  |  Ошибки: {plan.failed}  |  Пропущено: {plan.skipped}"
+            self.progress_pct.value = f"{pct * 100:.0f}%"
+            self.progress_label.value = f"Прогресс: {done}/{total}"
+            self.stats_label.value = f"✅ Успешно: {plan.completed}  |  ❌ Ошибки: {plan.failed}  |  ⏭️ Пропущено: {plan.skipped}"
         try:
             self.page.update()
         except Exception:
@@ -1305,6 +1362,94 @@ class EdonishAutoApp:
 
     def _on_log(self, message: str, level: str = "info"):
         self._log_message(message, level)
+
+    # ════════════════════════════════════════════════════════════════
+    #  DELETE GRADES
+    # ════════════════════════════════════════════════════════════════
+
+    def _on_delete_grades(self):
+        """Delete all grades for selected group/subject/quarter with confirmation."""
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        if not groups or not subjects or not quarters:
+            self._show_snackbar("Выберите класс, предмет и четверть!")
+            return
+
+        # Show confirmation dialog
+        self._confirm_dialog = AlertDialog(
+            modal=True,
+            title=Text("⚠️ Удаление оценок", weight=FontWeight.W_700),
+            content=Text(
+                "Вы уверены, что хотите удалить ВСЕ оценки\n"
+                "для выбранных класса, предмета и четверти?\n\n"
+                "Это действие нельзя отменить!",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_confirm_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Удалить", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.RED_600),
+                    on_click=lambda _: self._confirm_delete(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._confirm_dialog)
+        self._confirm_dialog.open = True
+        self.page.update()
+
+    def _close_confirm_dialog(self):
+        if hasattr(self, '_confirm_dialog') and self._confirm_dialog:
+            self._confirm_dialog.open = False
+            self.page.update()
+
+    def _confirm_delete(self):
+        self._close_confirm_dialog()
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        self.delete_btn.disabled = True
+        self.start_btn.disabled = True
+        self.analyze_btn.disabled = True
+        self.signature_btn.disabled = True
+        self.stop_btn.disabled = False
+        self.progress_label.value = "Удаление оценок..."
+        self.progress_pct.value = "0%"
+        self.progress_pct.color = ft.Colors.RED_600
+        self.page.update()
+
+        def run():
+            try:
+                self.engine.execute_delete_marks(
+                    groups=groups,
+                    subjects=subjects,
+                    quarters=quarters,
+                )
+            except Exception as e:
+                self._log_message(f"Ошибка удаления: {e}", "error")
+            finally:
+                self._on_delete_complete()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_delete_complete(self):
+        self.delete_btn.disabled = False
+        self.start_btn.disabled = False
+        self.stop_btn.disabled = True
+        self.analyze_btn.disabled = False
+        self.signature_btn.disabled = False
+        self.progress_pct.color = ft.Colors.BLUE_600
+        self.progress_label.value = "Удаление завершено"
+        try:
+            self.page.update()
+        except Exception:
+            pass
 
     def _log_message(self, message: str, level: str = "info"):
         timestamp = datetime.now().strftime("%H:%M:%S")

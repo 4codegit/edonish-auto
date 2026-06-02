@@ -572,3 +572,126 @@ class GradeEngine:
         self._running = False
         self._log(f"🏁 Подписи: ✅ {completed}, ❌ {failed}")
         return plan
+
+    def execute_delete_marks(
+        self,
+        groups: List[Dict],
+        subjects: List[Dict],
+        quarters: List[Dict],
+        task_delay: float = 0.1,
+    ) -> GradePlan:
+        """Delete all marks for selected group/subject/quarter combinations."""
+        self._running = True
+        self._stop_event.clear()
+        plan = GradePlan()
+        self._log("📋 Построение плана удаления оценок...")
+
+        total_to_delete = 0
+
+        for group in groups:
+            group_id = group["id"]
+            group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
+
+            for subject in subjects:
+                subject_id = subject.get("subjectId", subject.get("id"))
+                subject_name = subject.get("subjectName", subject.get("name", ""))
+
+                for quarter in quarters:
+                    qprop_id = quarter["qpropId"]
+                    quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
+
+                    self._log(f"🗑️ {group_name} | {subject_name} | {quarter_name}")
+
+                    try:
+                        students = self.api.get_journal_students(
+                            group_id=group_id,
+                            subject_id=subject_id,
+                            quarter_property_id=qprop_id,
+                        )
+                    except Exception as e:
+                        self._log(f"  ❌ Ошибка получения студентов: {e}", "error")
+                        continue
+
+                    if not students:
+                        continue
+
+                    for student in students:
+                        student_id = student["studentId"]
+                        student_name = f"{student.get('lastName', '')} {student.get('firstName', '')}"
+
+                        # Collect all mark IDs to delete
+                        for mark in (student.get("subjectMarks") or []):
+                            mark_id = mark.get("id")
+                            if mark_id:
+                                task = GradeTask(
+                                    student_id=student_id,
+                                    student_name=student_name,
+                                    assignment_date_id=mark.get("assignmentDateId", ""),
+                                    date_str=mark.get("shortName", ""),
+                                    quarter_property_id=qprop_id,
+                                    mark=int(mark.get("shortName", "0")) if mark.get("shortName", "").isdigit() else 0,
+                                    subject_name=subject_name,
+                                    group_name=group_name,
+                                    result=mark_id,  # store mark_id in result field
+                                )
+                                plan.add_task(task)
+                                total_to_delete += 1
+
+                        # Also collect quarter marks
+                        for qm in (student.get("quarterMark") or []):
+                            qm_id = qm.get("id")
+                            if qm_id and qm.get("shortName"):
+                                task = GradeTask(
+                                    student_id=student_id,
+                                    student_name=student_name,
+                                    assignment_date_id="",
+                                    date_str=f"Чтв: {qm.get('shortName', '')}",
+                                    quarter_property_id=qprop_id,
+                                    mark=0,
+                                    subject_name=subject_name,
+                                    group_name=group_name,
+                                    result=qm_id,
+                                )
+                                plan.add_task(task)
+                                total_to_delete += 1
+
+        self._log(f"📋 Найдено {total_to_delete} оценок для удаления")
+
+        if total_to_delete == 0:
+            self._log("✅ Нет оценок для удаления")
+            self._running = False
+            return plan
+
+        # Execute deletions
+        completed = 0
+        failed = 0
+
+        for task in plan.tasks:
+            if self._stop_event.is_set():
+                break
+
+            task.status = "running"
+            try:
+                result = self.api.delete_mark(mark_id=task.result)
+                if result:
+                    task.status = "success"
+                    completed += 1
+                    plan.completed = completed
+                    self._log(f"  🗑️ {task.student_name} — оценка удалена ({task.date_str})")
+                else:
+                    task.status = "error"
+                    failed += 1
+                    plan.failed = failed
+            except Exception as e:
+                task.status = "error"
+                task.error = str(e)
+                failed += 1
+                plan.failed = failed
+                self._log(f"  ❌ {task.student_name}: {e}", "error")
+
+            self._update_progress(plan)
+            time.sleep(task_delay)
+
+        self._running = False
+        self._log(f"🏁 Удаление: ✅ {completed} удалено, ❌ {failed} ошибок")
+        return plan
