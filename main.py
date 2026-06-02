@@ -378,7 +378,7 @@ class EdonishAutoApp:
                     Container(expand=True),
                     Text("Del: удалить | Стрелки: навигация | F5: анализировать", size=11, color=ft.Colors.GREY_400),
                 ]),
-                padding=ft.padding.only(left=12, top=6, right=12, bottom=6),
+                padding=ft.controls.padding.Padding(left=12, top=6, right=12, bottom=6),
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
                 border=Border(
                     top=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
@@ -681,7 +681,7 @@ class EdonishAutoApp:
             options=[dropdown.Option("Все классы")],
             value="Все классы",
         )
-        self.journal_class_dropdown.on_change = self._on_journal_class_change
+        self.journal_class_dropdown.on_select = self._on_journal_class_change
         self.journal_subject_dropdown = Dropdown(
             label="Предмет",
             width=250,
@@ -1617,7 +1617,7 @@ class EdonishAutoApp:
             border_radius=4,
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.BLUE_600,
-            content_padding=ft.padding.only(left=2, right=2, top=4, bottom=4),
+            content_padding=ft.controls.padding.Padding(left=2, right=2, top=4, bottom=4),
             bgcolor=cell_bgcolor,
             input_filter=ft.NumbersOnlyInputFilter(),
             max_length=2,
