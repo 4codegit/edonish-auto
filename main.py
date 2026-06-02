@@ -234,6 +234,14 @@ class EdonishAutoApp:
 
     def _on_dashboard_keyboard(self, e):
         """Handle keyboard shortcuts on the dashboard and journal grid navigation."""
+        # Global shortcuts (always active, regardless of cell selection)
+        if e.key == "s" and e.ctrl:
+            self._on_save_journal()
+            return
+        elif e.key == "F5":
+            self._on_analyze()
+            return
+
         # Arrow key navigation in journal grid
         if self._selected_cell and self._journal_loaded:
             row, col = self._selected_cell
@@ -270,13 +278,9 @@ class EdonishAutoApp:
                             self._set_cell_grade(row, col, grade)
                 return
 
-        # Global shortcuts
-        if e.key == "s" and e.ctrl:
-            self._on_save_journal()
-        elif e.key == "Delete" and not self._selected_cell:
+        # Global Delete (when no cell selected)
+        if e.key == "Delete" and not self._selected_cell:
             self._on_delete_grades()
-        elif e.key == "F5":
-            self._on_analyze()
 
     # ════════════════════════════════════════════════════════════════
     #  DASHBOARD VIEW
@@ -427,6 +431,7 @@ class EdonishAutoApp:
             text_size=15,
             options=[dropdown.Option("Все классы")],
             value="Все классы",
+            on_select=self._on_class_change,
         )
         self.subject_dropdown = Dropdown(
             label="Предмет",
@@ -434,6 +439,7 @@ class EdonishAutoApp:
             text_size=15,
             options=[dropdown.Option("Все предметы")],
             value="Все предметы",
+            on_select=self._on_subject_change,
         )
         self.quarter_dropdown = Dropdown(
             label="Четверть",
@@ -690,6 +696,7 @@ class EdonishAutoApp:
             text_size=15,
             options=[dropdown.Option("Все предметы")],
             value="Все предметы",
+            on_select=lambda e: self._safe_update(),
         )
         self.journal_quarter_dropdown = Dropdown(
             label="Четверть",
@@ -697,6 +704,7 @@ class EdonishAutoApp:
             text_size=15,
             options=[dropdown.Option("Все четверти")],
             value="Все четверти",
+            on_select=lambda e: self._safe_update(),
         )
         self.journal_load_btn = FilledButton(
             content=ft.Row([
@@ -984,7 +992,7 @@ class EdonishAutoApp:
 
                 self.groups_data = groups
                 self.teacher_subjects = [
-                    {"id": sid, "name": sname} for sid, sname in subjects_set
+                    {"subjectId": sid, "subjectName": sname} for sid, sname in subjects_set
                 ]
                 self.quarters_data = self.api.get_quarters() or []
                 self._update_dropdowns()
@@ -1004,7 +1012,7 @@ class EdonishAutoApp:
         self.journal_class_dropdown.options = class_options
 
         subject_options = [dropdown.Option("Все предметы")] + [
-            dropdown.Option(s["name"]) for s in sorted(self.teacher_subjects, key=lambda x: x["name"])
+            dropdown.Option(s["subjectName"]) for s in sorted(self.teacher_subjects, key=lambda x: x["subjectName"])
         ]
         self.subject_dropdown.options = subject_options
         self.journal_subject_dropdown.options = subject_options
@@ -1026,6 +1034,35 @@ class EdonishAutoApp:
         self._log_message(msg)
         try:
             self.page.run_thread(self._safe_update)
+        except Exception:
+            pass
+
+    def _on_class_change(self, e):
+        """Filter subjects when class changes on the auto-grade page."""
+        if not self.journal_options:
+            return
+        value = e.control.value
+        subjects = []
+        for g in self.journal_options.get("groups", []):
+            gname = f"{g.get('number', '')}{g.get('name', '')}"
+            if gname == value or value == "Все классы":
+                for s in g.get("subjects", []):
+                    subjects.append(s["subjectName"])
+        subjects = sorted(list(set(subjects)))
+        subject_options = [dropdown.Option("Все предметы")] + [dropdown.Option(s) for s in subjects]
+        self.subject_dropdown.options = subject_options
+        self.subject_dropdown.value = "Все предметы"
+        try:
+            self.page.update()
+        except Exception:
+            pass
+
+    def _on_subject_change(self, e):
+        """Handle subject selection change on the auto-grade page."""
+        # Value is already updated by the dropdown itself
+        # This handler exists to ensure the dropdown responds properly
+        try:
+            self.page.update()
         except Exception:
             pass
 
@@ -1375,8 +1412,8 @@ class EdonishAutoApp:
                 break
 
         for s in self.teacher_subjects:
-            if s["name"] == subject_name:
-                subject_id = s["id"]
+            if s["subjectName"] == subject_name:
+                subject_id = s["subjectId"]
                 break
 
         for q in self.quarters_data:
@@ -1817,14 +1854,14 @@ class EdonishAutoApp:
         target = self._grade_cells.get((row, col))
         if target:
             self._selected_cell = (row, col)
-            # In Flet 0.85.2, focus() is async — use run_thread to avoid RuntimeWarning
-            try:
-                self.page.run_thread(lambda: target.focus())
-            except Exception:
-                try:
-                    target.focus()
-                except Exception:
-                    pass
+            # In Flet 0.85.2, focus() is async. We must not await it from
+            # a sync context. Simply call it — the underlying Flet protocol
+            # command is still dispatched even though the coroutine is not
+            # awaited; suppress the RuntimeWarning.
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                target.focus()
 
     def _on_clear_all_grades(self):
         """Clear all grades in the current journal view with confirmation."""

@@ -202,7 +202,7 @@ class EdonishAPI:
         self, group_id: int, subject_id: int, quarter_property_id: int, lang: int = LANG_RU
     ) -> List[Dict]:
         """Get students with their marks for a specific group/subject/quarter."""
-        return self._request(
+        result = self._request(
             "GET",
             self._url(JOURNAL_STUDENTS),
             params={
@@ -213,6 +213,13 @@ class EdonishAPI:
                 "lang": lang,
             },
         )
+        # Debug: log what keys the first student has (for diagnosing mark detection)
+        if result and isinstance(result, list) and len(result) > 0:
+            first = result[0]
+            mark_keys = [k for k in first.keys() if 'mark' in k.lower() or 'Mark' in k]
+            total_marks = sum(len(first.get(k, []) or []) for k in mark_keys)
+            logger.debug(f"get_journal_students: {len(result)} students, mark_keys={mark_keys}, first_student_marks={total_marks}")
+        return result
 
     def get_journal_dates_final(
         self, group_id: int, curriculum_property_id: int, lang: int = LANG_RU

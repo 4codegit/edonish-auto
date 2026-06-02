@@ -173,7 +173,10 @@ class GradeEngine:
                         self._log(f"  ⏭️ Нет студентов")
                         continue
 
+                    self._log(f"  📊 Найдено {len(students)} студентов, {len(days)} дат")
+
                     # Build a map of student marks by date
+                    marks_found = 0
                     for student in students:
                         student_id = student["studentId"]
                         student_name = f"{student.get('lastName', '')} {student.get('firstName', '')}"
@@ -183,6 +186,7 @@ class GradeEngine:
                         for mark in (student.get("subjectMarks") or []):
                             date_id = mark.get("assignmentDateId")
                             existing_marks[date_id] = mark
+                            marks_found += 1
 
                         # Plan grades for each date
                         for day in days:
@@ -225,6 +229,11 @@ class GradeEngine:
                                 existing_mark_id=existing_mark_id,
                             )
                             plan.add_task(task)
+
+                    if marks_found == 0:
+                        self._log(f"  ⚠️ У студентов нет оценок (subjectMarks пустой)")
+                    else:
+                        self._log(f"  📊 Найдено {marks_found} существующих оценок у студентов")
 
         self._log(f"✅ План построен: {plan.total_tasks} задач ({plan.skipped} пропущено)")
         return plan
@@ -627,14 +636,22 @@ class GradeEngine:
                         continue
 
                     if not students:
+                        self._log(f"  ⏭️ Нет студентов")
                         continue
+
+                    self._log(f"  📊 Найдено {len(students)} студентов")
 
                     for student in students:
                         student_id = student["studentId"]
                         student_name = f"{student.get('lastName', '')} {student.get('firstName', '')}"
 
                         # Collect all mark IDs to delete
-                        for mark in (student.get("subjectMarks") or []):
+                        marks = student.get("subjectMarks") or []
+                        if not marks:
+                            # Try alternate keys
+                            marks = student.get("marks") or student.get("subject_marks") or []
+                        
+                        for mark in marks:
                             mark_id = mark.get("id")
                             if mark_id:
                                 task = GradeTask(
