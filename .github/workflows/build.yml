@@ -48,7 +48,6 @@ jobs:
           $certifiDir = python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))"
           $upxDir = (Get-Command upx).Source | Split-Path
           flet pack main.py --name edonish-auto `
-            --upx-dir "$upxDir" `
             --hidden-import requests `
             --hidden-import urllib3 `
             --hidden-import urllib3.util `
@@ -58,15 +57,7 @@ jobs:
             --hidden-import darkdetect `
             --hidden-import packaging `
             --add-data "${certifiDir}:certifi" `
-            --exclude-module tkinter --exclude-module _tkinter `
-            --exclude-module unittest --exclude-module test --exclude-module tests `
-            --exclude-module pydoc --exclude-module doctest `
-            --exclude-module xml.dom --exclude-module xml.sax --exclude-module xml.etree `
-            --exclude-module curses --exclude-module lib2to3 `
-            --exclude-module setuptools --exclude-module pip --exclude-module wheel `
-            --exclude-module asyncio --exclude-module email `
-            --exclude-module html --exclude-module xmlrpc `
-            --exclude-module multiprocessing
+            --pyinstaller-build-args "--upx-dir $upxDir --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
         shell: pwsh
 
       - name: Prepare dist directory
@@ -131,22 +122,13 @@ jobs:
           CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
           UPX_DIR=$(dirname $(which upx 2>/dev/null || echo "/usr/bin/upx"))
           flet pack main.py --name edonish-auto \
-            --upx-dir "$UPX_DIR" \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi" \
-            --exclude-module tkinter --exclude-module _tkinter \
-            --exclude-module unittest --exclude-module test --exclude-module tests \
-            --exclude-module pydoc --exclude-module doctest \
-            --exclude-module xml.dom --exclude-module xml.sax --exclude-module xml.etree \
-            --exclude-module curses --exclude-module lib2to3 \
-            --exclude-module setuptools --exclude-module pip --exclude-module wheel \
-            --exclude-module asyncio --exclude-module email \
-            --exclude-module html --exclude-module xmlrpc \
-            --exclude-module multiprocessing
+            --pyinstaller-build-args "--upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
 
       - name: Move binary to dist/linux and report size
         run: |
@@ -199,22 +181,13 @@ jobs:
           UPX_DIR=$(dirname $(which upx 2>/dev/null || echo "/usr/local/bin/upx"))
           flet pack main.py --name edonish-auto \
             --bundle-id tj.edonish.auto \
-            --upx-dir "$UPX_DIR" \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
             --add-data "${CERTIFI_DIR}:certifi" \
-            --exclude-module tkinter --exclude-module _tkinter \
-            --exclude-module unittest --exclude-module test --exclude-module tests \
-            --exclude-module pydoc --exclude-module doctest \
-            --exclude-module xml.dom --exclude-module xml.sax --exclude-module xml.etree \
-            --exclude-module curses --exclude-module lib2to3 \
-            --exclude-module setuptools --exclude-module pip --exclude-module wheel \
-            --exclude-module asyncio --exclude-module email \
-            --exclude-module html --exclude-module xmlrpc \
-            --exclude-module multiprocessing
+            --pyinstaller-build-args "--upx-dir $UPX_DIR --exclude-module tkinter --exclude-module _tkinter --exclude-module unittest --exclude-module pydoc --exclude-module doctest --exclude-module curses --exclude-module lib2to3 --exclude-module setuptools --exclude-module pip --exclude-module wheel --exclude-module asyncio --exclude-module xmlrpc --exclude-module multiprocessing" 
 
       - name: Free disk space and package macOS app
         run: |
