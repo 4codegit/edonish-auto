@@ -72,13 +72,14 @@ jobs:
           copy dist\edonish-auto-cli.exe dist\windows\
         shell: pwsh
 
-      - name: Install NSIS and build installer
+      - name: Build installer with Inno Setup
         run: |
-          choco install nsis -y
-          $nsisPath = "C:\Program Files (x86)\NSIS"
-          $env:Path = "$nsisPath;$env:Path"
-          makensis installer.nsi
-          copy "edonish-auto-${{ env.APP_VERSION }}-setup.exe" dist\windows\
+          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y
+            $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" | Select-Object -First 1
+          }
+          & $iscc.FullName installer.iss
         shell: pwsh
 
       - name: Upload Windows artifacts
