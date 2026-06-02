@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════
 
 !define APPNAME "eDonish Auto"
-!define APPVERSION "2.0.0"
+!define APPVERSION "3.0.2"
 !define APPEXE "edonish-auto.exe"
 !define CLIEXE "edonish-auto-cli.exe"
 !define COMPANY "Edonish Auto Team"
@@ -41,12 +41,6 @@ Section "Core Files" SecCore
     ; Main executables
     File "dist\windows\${APPEXE}"
     File "dist\windows\${CLIEXE}"
-
-    ; Config files
-    File "config.py"
-    File "api_client.py"
-    File "grade_engine.py"
-    File "requirements.txt"
 
     ; Create directories
     CreateDirectory "$INSTDIR\logs"

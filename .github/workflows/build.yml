@@ -72,6 +72,15 @@ jobs:
           copy dist\edonish-auto-cli.exe dist\windows\
         shell: pwsh
 
+      - name: Install NSIS and build installer
+        run: |
+          choco install nsis -y
+          $nsisPath = "C:\Program Files (x86)\NSIS"
+          $env:Path = "$nsisPath;$env:Path"
+          makensis installer.nsi
+          copy "edonish-auto-${{ env.APP_VERSION }}-setup.exe" dist\windows\
+        shell: pwsh
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
