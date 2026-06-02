@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.1.0
+  APP_VERSION: 3.2.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -228,13 +228,14 @@ jobs:
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового:
-            - Исправлены иконки на кнопках (Flet 0.85.2 content+icon совместимость)
-            - Полная совместимость с Flet 0.85.2
-            - Исправлена сборка через GitHub Actions CI/CD
+            ### Что нового в v3.2.0:
+            - 🔧 Исправлена логика оценок: диапазон 3-10 вместо 8-10
+            - 📊 Взвешенное распределение оценок (чаще 7-9, реже 3-4 и 10)
+            - 📅 Автоопределение текущей четверти по дате
+            - ✍️ Новая функция: подписи учеников (комментарии в журнале)
 
             ### Установка:
-            - **Windows**: Скачайте `edonish-auto-3.1.0-setup.exe`, запустите установщик
+            - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
