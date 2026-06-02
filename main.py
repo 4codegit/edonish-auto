@@ -271,7 +271,9 @@ class EdonishAutoApp:
                 return
 
         # Global shortcuts
-        if e.key == "Delete" and not self._selected_cell:
+        if e.key == "s" and e.ctrl:
+            self._on_save_journal()
+        elif e.key == "Delete" and not self._selected_cell:
             self._on_delete_grades()
         elif e.key == "F5":
             self._on_analyze()
@@ -376,7 +378,7 @@ class EdonishAutoApp:
                 content=Row([
                     self.status_text,
                     Container(expand=True),
-                    Text("Del: удалить | Стрелки: навигация | F5: анализировать", size=11, color=ft.Colors.GREY_400),
+                    Text("Ctrl+S: сохранить | Del: удалить | Стрелки: навигация | F5: анализировать", size=11, color=ft.Colors.GREY_400),
                 ]),
                 padding=ft.controls.padding.Padding(left=12, top=6, right=12, bottom=6),
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
@@ -1007,7 +1009,7 @@ class EdonishAutoApp:
         msg = f"Загружено: {len(self.groups_data)} классов, {len(self.teacher_subjects)} предметов"
         self._log_message(msg)
         try:
-            self.page.update()
+            self.page.run_thread(self._safe_update)
         except Exception:
             pass
 
@@ -1126,10 +1128,7 @@ class EdonishAutoApp:
         self.stop_btn.disabled = True
         self.analyze_btn.disabled = False
         self.progress_label.value = "Подписи добавлены"
-        try:
-            self.page.update()
-        except Exception:
-            pass
+        self.page.run_thread(self._safe_update)
 
     # ════════════════════════════════════════════════════════════════
     #  GRADE AUTOMATION
@@ -1196,14 +1195,12 @@ class EdonishAutoApp:
             except Exception as e:
                 self._log_message(f"Ошибка анализа: {e}", "error")
                 self.analyze_btn.disabled = False
-                self.analyze_btn.content.value = "Анализировать"
-                self.page.update()
+                self.page.run_thread(self._safe_update)
 
         threading.Thread(target=analyze, daemon=True).start()
 
     def _on_analyze_complete(self, plan: GradePlan):
         self.analyze_btn.disabled = False
-        self.analyze_btn.content.value = "Анализировать"
         self.start_btn.disabled = False
         self.signature_btn.disabled = False
 
@@ -1236,11 +1233,12 @@ class EdonishAutoApp:
 
         self.results_text.value = "\n".join(lines)
         self.progress_label.value = f"Анализ завершён: {to_execute} оценок будет добавлено"
+        self.progress_bar.value = 0
+        self.progress_pct.value = "0%"
+        self.progress_pct.color = ft.Colors.BLUE_600
+        self.stats_label.value = f"Будет добавлено: {to_execute}  |  Пропущено: {plan.skipped}"
 
-        try:
-            self.page.update()
-        except Exception:
-            pass
+        self.page.run_thread(self._safe_update)
 
     def _on_start(self):
         if not self._current_plan:
@@ -1311,12 +1309,12 @@ class EdonishAutoApp:
             plan = self._current_plan
             done = plan.completed + plan.failed
             total = plan.total_tasks - plan.skipped
+            pct = done / total if total > 0 else 1.0
             self.progress_label.value = f"Завершено: {done}/{total}"
+            self.progress_pct.value = f"{pct * 100:.0f}%"
+            self.progress_bar.value = pct
             self.stats_label.value = f"Успешно: {plan.completed}  |  Ошибки: {plan.failed}  |  Пропущено: {plan.skipped}"
-        try:
-            self.page.update()
-        except Exception:
-            pass
+        self.page.run_thread(self._safe_update)
 
     # ════════════════════════════════════════════════════════════════
     #  INTERACTIVE JOURNAL GRID
@@ -1586,7 +1584,7 @@ class EdonishAutoApp:
         self.page.on_keyboard_event = self._on_dashboard_keyboard
 
         try:
-            self.page.update()
+            self.page.run_thread(self._safe_update)
         except Exception:
             pass
 
@@ -1685,7 +1683,7 @@ class EdonishAutoApp:
                 self.page.update()
 
     def _set_cell_grade(self, row, col, grade):
-        """Set a grade for a cell via API call."""
+        """Set a grade for a cell via API call. Deletes existing mark first if present."""
         data = self._grade_data.get((row, col))
         if not data:
             return
@@ -1699,6 +1697,13 @@ class EdonishAutoApp:
 
         def do_set():
             try:
+                # Delete existing mark before creating a new one
+                existing_mark_id = data.get("mark_id", "")
+                if existing_mark_id:
+                    try:
+                        self.api.delete_mark(mark_id=existing_mark_id)
+                    except Exception:
+                        pass  # Old mark may not exist or already deleted
                 result = self.api.create_mark(
                     student_id=data["student_id"],
                     assignment_date_id=data["date_id"],
@@ -1721,10 +1726,7 @@ class EdonishAutoApp:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка: {ex}", "error")
             finally:
-                try:
-                    self.page.update()
-                except Exception:
-                    pass
+                self.page.run_thread(self._safe_update)
 
         threading.Thread(target=do_set, daemon=True).start()
 
@@ -1762,10 +1764,7 @@ class EdonishAutoApp:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка удаления: {ex}", "error")
             finally:
-                try:
-                    self.page.update()
-                except Exception:
-                    pass
+                self.page.run_thread(self._safe_update)
 
         threading.Thread(target=do_delete, daemon=True).start()
 
@@ -1854,6 +1853,10 @@ class EdonishAutoApp:
 
             self._log_message(f"Удаление завершено: {deleted} удалено, {failed} ошибок")
             self.journal_clear_btn.disabled = False
+            try:
+                self.page.run_thread(self._safe_update)
+            except Exception:
+                pass
             # Reload journal to reflect changes
             self._on_load_journal()
 
@@ -1864,6 +1867,7 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _on_progress(self, plan: GradePlan):
+        """Called from engine worker threads — update UI safely via Flet thread."""
         total = plan.total_tasks - plan.skipped
         if total > 0:
             done = plan.completed + plan.failed
@@ -1873,12 +1877,13 @@ class EdonishAutoApp:
             self.progress_label.value = f"Прогресс: {done}/{total}"
             self.stats_label.value = f"✅ Успешно: {plan.completed}  |  ❌ Ошибки: {plan.failed}  |  ⏭️ Пропущено: {plan.skipped}"
         try:
-            self.page.update()
+            self.page.run_thread(self._safe_update)
         except Exception:
             pass
 
     def _on_log(self, message: str, level: str = "info"):
-        self._log_message(message, level)
+        """Called from engine worker threads — schedule log on Flet thread."""
+        self.page.run_thread(lambda: self._log_message(message, level))
 
     # ════════════════════════════════════════════════════════════════
     #  DELETE GRADES
@@ -1963,10 +1968,7 @@ class EdonishAutoApp:
         self.signature_btn.disabled = False
         self.progress_pct.color = ft.Colors.BLUE_600
         self.progress_label.value = "Удаление завершено"
-        try:
-            self.page.update()
-        except Exception:
-            pass
+        self.page.run_thread(self._safe_update)
 
     def _log_message(self, message: str, level: str = "info"):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -1989,6 +1991,33 @@ class EdonishAutoApp:
         self.logs_list.controls.clear()
         self._log_message("Логи очищены")
         self.page.update()
+
+    def _safe_update(self):
+        """Thread-safe page update helper — safe to call from any thread."""
+        try:
+            self.page.update()
+        except Exception:
+            pass
+
+    def _on_save_journal(self):
+        """Save the currently selected cell grade (Ctrl+S)."""
+        if not self._journal_loaded or not self._selected_cell:
+            self._show_snackbar("Нет ячейки для сохранения")
+            return
+        row, col = self._selected_cell
+        cell = self._grade_cells.get((row, col))
+        if not cell:
+            return
+        val = cell.value
+        if val and val.strip() and val.strip().isdigit():
+            grade = int(val.strip())
+            if MIN_GRADE <= grade <= MAX_GRADE:
+                self._set_cell_grade(row, col, grade)
+                self._show_snackbar(f"Оценка {grade} сохранена")
+            else:
+                self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
+        else:
+            self._show_snackbar("Введите оценку для сохранения")
 
     def _show_snackbar(self, message: str):
         try:
