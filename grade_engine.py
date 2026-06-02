@@ -53,6 +53,7 @@ class GradeTask:
     status: str = "pending"  # pending, running, success, error, skipped
     error: str = ""
     result: Any = None
+    existing_mark_id: str = ""  # ID of existing mark to delete before creating new one
 
 
 @dataclass
@@ -205,6 +206,11 @@ class GradeEngine:
                                 plan.skipped += 1
                                 continue
 
+                            # If not fill_empty_only and there's an existing mark, store its ID for deletion
+                            existing_mark_id = ""
+                            if not fill_empty_only and date_id in existing_marks:
+                                existing_mark_id = existing_marks[date_id].get("id", "")
+
                             # Generate weighted random grade
                             grade = weighted_random_grade(min_grade, max_grade)
                             task = GradeTask(
@@ -216,6 +222,7 @@ class GradeEngine:
                                 mark=grade,
                                 subject_name=subject_name,
                                 group_name=group_name,
+                                existing_mark_id=existing_mark_id,
                             )
                             plan.add_task(task)
 
@@ -334,6 +341,13 @@ class GradeEngine:
                 self._update_progress(plan)
 
                 try:
+                    # Delete existing mark first if overwriting
+                    if task.existing_mark_id:
+                        try:
+                            self.api.delete_mark(mark_id=task.existing_mark_id)
+                        except Exception:
+                            pass  # Old mark may not exist or already deleted
+
                     result = self.api.create_mark(
                         student_id=task.student_id,
                         assignment_date_id=task.assignment_date_id,

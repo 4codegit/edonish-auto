@@ -709,6 +709,20 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_load_journal(),
         )
 
+        self.journal_save_btn = ft.Button(
+            content=ft.Row([
+                ft.Icon(Icons.SAVE, size=18),
+                ft.Text("Сохранить", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=14,
+            ),
+            on_click=lambda _: self._on_save_journal(),
+            tooltip="Ctrl+S",
+            disabled=True,
+        )
+
         self.journal_clear_btn = OutlinedButton(
             content=ft.Row([
                 ft.Icon(Icons.CLEANING_SERVICES, size=16),
@@ -772,6 +786,8 @@ class EdonishAutoApp:
                             Container(height=12),
                             Row([
                                 self.journal_load_btn,
+                                Container(width=12),
+                                self.journal_save_btn,
                                 Container(width=12),
                                 self.journal_clear_btn,
                             ], alignment=MainAxisAlignment.START),
@@ -1216,6 +1232,12 @@ class EdonishAutoApp:
         lines.append(f"  Пропущено:        {plan.skipped}")
         lines.append(f"")
 
+        if to_execute == 0 and plan.skipped > 0:
+            lines.append(f"  ⚠ Все ячейки уже заполнены оценками!")
+            lines.append(f"  Снимите галочку 'Только пустые ячейки',")
+            lines.append(f"  чтобы перезаписать существующие оценки.")
+            lines.append(f"")
+
         by_group = defaultdict(list)
         for task in plan.tasks:
             if task.status == "pending":
@@ -1232,11 +1254,20 @@ class EdonishAutoApp:
             lines.append("")
 
         self.results_text.value = "\n".join(lines)
-        self.progress_label.value = f"Анализ завершён: {to_execute} оценок будет добавлено"
-        self.progress_bar.value = 0
-        self.progress_pct.value = "0%"
-        self.progress_pct.color = ft.Colors.BLUE_600
-        self.stats_label.value = f"Будет добавлено: {to_execute}  |  Пропущено: {plan.skipped}"
+        
+        if to_execute == 0 and plan.skipped > 0:
+            self.progress_label.value = f"Все ячейки заполнены ({plan.skipped} пропущено)"
+            self.progress_bar.value = 1.0
+            self.progress_pct.value = "100%"
+            self.progress_pct.color = ft.Colors.ORANGE_600
+            self.stats_label.value = f"Заполнено: {plan.skipped} | Снимите 'Только пустые' для перезаписи"
+            self.start_btn.disabled = True
+        else:
+            self.progress_label.value = f"Анализ завершён: {to_execute} оценок будет добавлено"
+            self.progress_bar.value = 0
+            self.progress_pct.value = "0%"
+            self.progress_pct.color = ft.Colors.BLUE_600
+            self.stats_label.value = f"Будет добавлено: {to_execute}  |  Пропущено: {plan.skipped}"
 
         self.page.run_thread(self._safe_update)
 
@@ -1398,6 +1429,7 @@ class EdonishAutoApp:
             )
             self._journal_loaded = False
             self.journal_clear_btn.visible = False
+            self.journal_save_btn.disabled = True
             self.page.update()
             return
 
@@ -1407,6 +1439,7 @@ class EdonishAutoApp:
 
         self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
         self.journal_clear_btn.visible = True
+        self.journal_save_btn.disabled = False
         self._journal_loaded = True
 
         self._grid_rows = len(students)
@@ -1784,7 +1817,14 @@ class EdonishAutoApp:
         target = self._grade_cells.get((row, col))
         if target:
             self._selected_cell = (row, col)
-            target.focus()
+            # In Flet 0.85.2, focus() is async — use run_thread to avoid RuntimeWarning
+            try:
+                self.page.run_thread(lambda: target.focus())
+            except Exception:
+                try:
+                    target.focus()
+                except Exception:
+                    pass
 
     def _on_clear_all_grades(self):
         """Clear all grades in the current journal view with confirmation."""
@@ -1875,7 +1915,13 @@ class EdonishAutoApp:
             self.progress_bar.value = pct
             self.progress_pct.value = f"{pct * 100:.0f}%"
             self.progress_label.value = f"Прогресс: {done}/{total}"
-            self.stats_label.value = f"✅ Успешно: {plan.completed}  |  ❌ Ошибки: {plan.failed}  |  ⏭️ Пропущено: {plan.skipped}"
+            self.stats_label.value = f"Успешно: {plan.completed}  |  Ошибки: {plan.failed}  |  Пропущено: {plan.skipped}"
+        else:
+            self.progress_bar.value = 1.0
+            self.progress_pct.value = "100%"
+            self.progress_pct.color = ft.Colors.ORANGE_600
+            self.progress_label.value = "Все ячейки уже заполнены"
+            self.stats_label.value = f"Пропущено: {plan.skipped} — снимите 'Только пустые' для перезаписи"
         try:
             self.page.run_thread(self._safe_update)
         except Exception:
@@ -2000,31 +2046,62 @@ class EdonishAutoApp:
             pass
 
     def _on_save_journal(self):
-        """Save the currently selected cell grade (Ctrl+S)."""
-        if not self._journal_loaded or not self._selected_cell:
-            self._show_snackbar("Нет ячейки для сохранения")
+        """Save all modified grades in the journal (Ctrl+S)."""
+        if not self._journal_loaded:
+            self._show_snackbar("Сначала загрузите журнал!")
             return
-        row, col = self._selected_cell
-        cell = self._grade_cells.get((row, col))
-        if not cell:
+
+        # Find all cells that have been modified but not yet saved
+        modified_cells = []
+        for (row, col), data in self._grade_data.items():
+            cell = self._grade_cells.get((row, col))
+            if not cell:
+                continue
+            cell_value = cell.value or ""
+            current_saved = data.get("current_value", "")
+            # Check if the cell value differs from the saved value
+            if cell_value.strip() and cell_value.strip().isdigit():
+                grade = int(cell_value.strip())
+                if MIN_GRADE <= grade <= MAX_GRADE and str(grade) != current_saved:
+                    modified_cells.append((row, col, grade))
+
+        if not modified_cells:
+            # Also try the currently selected cell
+            if self._selected_cell:
+                row, col = self._selected_cell
+                cell = self._grade_cells.get((row, col))
+                if cell:
+                    val = cell.value
+                    if val and val.strip() and val.strip().isdigit():
+                        grade = int(val.strip())
+                        if MIN_GRADE <= grade <= MAX_GRADE:
+                            self._set_cell_grade(row, col, grade)
+                            self._show_snackbar(f"Оценка {grade} сохранена")
+                            return
+            self._show_snackbar("Нет изменений для сохранения")
             return
-        val = cell.value
-        if val and val.strip() and val.strip().isdigit():
-            grade = int(val.strip())
-            if MIN_GRADE <= grade <= MAX_GRADE:
-                self._set_cell_grade(row, col, grade)
-                self._show_snackbar(f"Оценка {grade} сохранена")
-            else:
-                self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
-        else:
-            self._show_snackbar("Введите оценку для сохранения")
+
+        # Save all modified cells
+        self._show_snackbar(f"Сохранение {len(modified_cells)} оценок...")
+        for row, col, grade in modified_cells:
+            self._set_cell_grade(row, col, grade)
+            time.sleep(0.15)  # Small delay between saves to avoid API rate limiting
 
     def _show_snackbar(self, message: str):
         try:
-            self.page.overlay.append(
-                SnackBar(content=Text(message, size=15))
-            )
+            snack = SnackBar(content=Text(message, size=15), open=True)
+            self.page.overlay.append(snack)
             self.page.update()
+            # Clean up old snackbars after a delay to avoid overlay accumulation
+            def cleanup():
+                time.sleep(3)
+                try:
+                    if snack in self.page.overlay:
+                        self.page.overlay.remove(snack)
+                        self.page.update()
+                except Exception:
+                    pass
+            threading.Thread(target=cleanup, daemon=True).start()
         except Exception:
             pass
 
