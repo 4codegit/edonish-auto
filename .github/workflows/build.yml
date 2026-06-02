@@ -72,14 +72,12 @@ jobs:
           copy dist\edonish-auto-cli.exe dist\windows\
         shell: pwsh
 
-      - name: Build installer with Inno Setup
+      - name: Install NSIS and build installer
         run: |
-          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $iscc) {
-            choco install innosetup -y
-            $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" | Select-Object -First 1
-          }
-          & $iscc.FullName installer.iss
+          choco install nsis -y
+          $env:Path = "C:\Program Files (x86)\NSIS;$env:Path"
+          makensis /V4 installer.nsi
+          copy "edonish-auto-${{ env.APP_VERSION }}-setup.exe" dist\windows\
         shell: pwsh
 
       - name: Upload Windows artifacts
@@ -252,7 +250,6 @@ jobs:
             Автоматизация электронного журнала edonish.tj
 
             ### Что нового:
-            - Windows-установщик теперь на Inno Setup (вместо NSIS)
             - Исправлена ошибка запуска GUI (Flutter Engine встроен в сборку через flet pack)
             - Исправлена ошибка SSL при загрузке Flutter Engine (monkey-patch ssl.create_default_context)
             - Заменён ft.app() на ft.run() (устаревший API)
