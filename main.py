@@ -171,11 +171,10 @@ class EdonishAutoApp:
             text_align=TextAlign.CENTER,
         )
         self.login_btn = FilledButton(
-            text="Войти",
+            content=ft.Text("Войти", size=17, weight=FontWeight.W_600),
             width=380,
             height=52,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=17, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=12),
             ),
             on_click=lambda _: self._on_login(),
@@ -439,20 +438,18 @@ class EdonishAutoApp:
 
         # ── Action buttons ──────────────────────────────────────────
         self.analyze_btn = ElevatedButton(
-            text="Анализировать",
+            content=ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
             icon=Icons.SEARCH,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=padding.symmetric(horizontal=24, vertical=14),
             ),
             on_click=lambda _: self._on_analyze(),
         )
         self.start_btn = FilledButton(
-            text="Запустить",
+            content=ft.Text("Запустить", size=15, weight=FontWeight.W_600),
             icon=Icons.PLAY_ARROW,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=padding.symmetric(horizontal=24, vertical=14),
                 bgcolor=ft.Colors.GREEN_600,
@@ -461,10 +458,9 @@ class EdonishAutoApp:
             disabled=True,
         )
         self.stop_btn = OutlinedButton(
-            text="Стоп",
+            content=ft.Text("Стоп", size=15, weight=FontWeight.W_600),
             icon=Icons.STOP,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=15, weight=FontWeight.W_600),
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=padding.symmetric(horizontal=24, vertical=14),
                 color=ft.Colors.RED_600,
@@ -579,10 +575,9 @@ class EdonishAutoApp:
             options=[dropdown.Option("Выберите...")],
         )
         self.journal_load_btn = FilledButton(
-            text="Загрузить",
+            content=ft.Text("Загрузить", size=15, weight=FontWeight.W_500),
             icon=Icons.DOWNLOAD,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=15, weight=FontWeight.W_500),
                 shape=ft.RoundedRectangleBorder(radius=10),
             ),
             on_click=lambda _: self._on_load_journal(),
@@ -652,10 +647,9 @@ class EdonishAutoApp:
         )
 
         clear_btn = OutlinedButton(
-            text="Очистить",
+            content=ft.Text("Очистить", size=14),
             icon=Icons.DELETE_OUTLINE,
             style=ButtonStyle(
-                text_style=ft.TextStyle(size=14),
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
             on_click=lambda _: self._clear_logs(),
