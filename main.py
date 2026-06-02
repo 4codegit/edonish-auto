@@ -113,6 +113,13 @@ class EdonishAutoApp:
         self._current_plan = None
         self._loading_data = False
         self._logs_lines = []
+        self._grade_cells = {}
+        self._grade_data = {}
+        self._selected_cell = None
+        self._grid_rows = 0
+        self._grid_cols = 0
+        self._journal_loaded = False
+        self._current_journal_params = {}
 
         # Page config
         self.page.title = f"{APP_NAME} v{APP_VERSION}"
@@ -226,8 +233,35 @@ class EdonishAutoApp:
             self._on_login()
 
     def _on_dashboard_keyboard(self, e):
-        """Handle keyboard shortcuts on the dashboard."""
-        if e.key == "Delete":
+        """Handle keyboard shortcuts on the dashboard and journal grid navigation."""
+        # Arrow key navigation in journal grid
+        if self._selected_cell and self._journal_loaded:
+            row, col = self._selected_cell
+            if e.key == "ArrowRight":
+                self._move_to_cell(row, col + 1)
+                return
+            elif e.key == "ArrowLeft":
+                self._move_to_cell(row, col - 1)
+                return
+            elif e.key == "ArrowDown":
+                self._move_to_cell(row + 1, col)
+                return
+            elif e.key == "ArrowUp":
+                self._move_to_cell(row - 1, col)
+                return
+            elif e.key == "Delete":
+                # Delete grade from current cell in journal
+                self._delete_cell_grade(row, col)
+                return
+            elif e.key == "Tab":
+                if e.shift:
+                    self._move_to_cell(row, col - 1)
+                else:
+                    self._move_to_cell(row, col + 1)
+                return
+
+        # Global shortcuts
+        if e.key == "Delete" and not self._selected_cell:
             self._on_delete_grades()
         elif e.key == "F5":
             self._on_analyze()
@@ -332,7 +366,7 @@ class EdonishAutoApp:
                 content=Row([
                     self.status_text,
                     Container(expand=True),
-                    Text("Del: удалить  |  F5: анализировать", size=11, color=ft.Colors.GREY_400),
+                    Text("Del: удалить | Стрелки: навигация | F5: анализировать", size=11, color=ft.Colors.GREY_400),
                 ]),
                 padding=ft.padding.only(left=12, top=6, right=12, bottom=6),
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
@@ -629,7 +663,7 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _build_journal_page(self):
-        """Journal viewer page."""
+        """Interactive journal page with editable grade grid, arrow-key navigation, and Delete support."""
         self.journal_class_dropdown = Dropdown(
             label="Класс",
             width=200,
@@ -660,13 +694,41 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_load_journal(),
         )
 
+        self.journal_clear_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.CLEANING_SERVICES, size=16),
+                ft.Text("Очистить все", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                color=ft.Colors.RED_700,
+            ),
+            on_click=lambda _: self._on_clear_all_grades(),
+            tooltip="Удалить все оценки в журнале",
+            visible=False,
+        )
+
         self.journal_student_count = Text("", size=13, color=ft.Colors.GREY_500)
 
-        self.journal_text = Text(
-            "Выберите класс, предмет и четверть для просмотра журнала",
+        # Placeholder text when no journal loaded
+        self.journal_placeholder = Text(
+            "Выберите класс, предмет и четверть для просмотра журнала\n\n"
+            "Стрелки — навигация по ячейкам | Ввод цифры — поставить оценку\n"
+            "Delete — удалить оценку из ячейки",
             size=14,
-            font_family="Roboto Mono",
             color=ft.Colors.GREY_600,
+            text_align=TextAlign.CENTER,
+        )
+
+        # The grid container — will be populated by _display_journal_grid
+        self.journal_grid_container = Container(
+            expand=True,
+            content=Column(
+                [self.journal_placeholder],
+                scroll=ScrollMode.AUTO,
+                expand=True,
+                horizontal_alignment=CrossAxisAlignment.CENTER,
+            ),
         )
 
         self.journal_page = Column(
@@ -693,6 +755,8 @@ class EdonishAutoApp:
                                 self.journal_quarter_dropdown,
                                 Container(width=16),
                                 self.journal_load_btn,
+                                Container(width=16),
+                                self.journal_clear_btn,
                             ], alignment=MainAxisAlignment.START),
                         ]),
                     ),
@@ -702,13 +766,9 @@ class EdonishAutoApp:
                     elevation=2,
                     expand=True,
                     content=Container(
-                        padding=24,
+                        padding=16,
                         expand=True,
-                        content=Column(
-                            [self.journal_text],
-                            scroll=ScrollMode.AUTO,
-                            expand=True,
-                        ),
+                        content=self.journal_grid_container,
                     ),
                 ),
             ],
@@ -843,6 +903,13 @@ class EdonishAutoApp:
             self.engine.stop()
         self._logged_in = False
         self._current_plan = None
+        self._grade_cells = {}
+        self._grade_data = {}
+        self._selected_cell = None
+        self._grid_rows = 0
+        self._grid_cols = 0
+        self._journal_loaded = False
+        self._current_journal_params = {}
         self.api = EdonishAPI()
         self.engine = GradeEngine(self.api)
         self.engine.set_callbacks(
@@ -1231,10 +1298,11 @@ class EdonishAutoApp:
             pass
 
     # ════════════════════════════════════════════════════════════════
-    #  JOURNAL VIEWER
+    #  INTERACTIVE JOURNAL GRID
     # ════════════════════════════════════════════════════════════════
 
     def _on_load_journal(self):
+        """Load journal data and build the interactive grade grid."""
         class_name = self.journal_class_dropdown.value
         subject_name = self.journal_subject_dropdown.value
         quarter_name = self.journal_quarter_dropdown.value
@@ -1262,9 +1330,15 @@ class EdonishAutoApp:
                 break
 
         if not all([group_id, subject_id, qprop_id]):
-            self.journal_text.value = "Выберите класс, предмет и четверть"
-            self.page.update()
+            self._show_snackbar("Выберите класс, предмет и четверть!")
             return
+
+        # Store for later API calls from cells
+        self._current_journal_params = {
+            "group_id": group_id,
+            "subject_id": subject_id,
+            "qprop_id": qprop_id,
+        }
 
         self._log_message("Загрузка журнала...")
 
@@ -1280,17 +1354,26 @@ class EdonishAutoApp:
                     subject_id=subject_id,
                     quarter_property_id=qprop_id,
                 )
-                self._display_journal(students, dates_data)
+                self._display_journal_grid(students, dates_data)
             except Exception as e:
                 self._log_message(f"Ошибка загрузки журнала: {e}", "error")
 
         threading.Thread(target=load, daemon=True).start()
 
-    def _display_journal(self, students, dates_data):
-        lines = []
+    def _display_journal_grid(self, students, dates_data):
+        """Build an interactive grade grid with editable cells, arrow-key nav, and Delete support."""
+        # Reset grid state
+        self._grade_cells = {}
+        self._grade_data = {}
+        self._selected_cell = None
 
         if not students:
-            self.journal_text.value = "Нет данных"
+            self.journal_grid_container.content = Column(
+                [Text("Нет данных", size=16, color=ft.Colors.GREY_600, text_align=TextAlign.CENTER)],
+                horizontal_alignment=CrossAxisAlignment.CENTER,
+            )
+            self._journal_loaded = False
+            self.journal_clear_btn.visible = False
             self.page.update()
             return
 
@@ -1299,48 +1382,436 @@ class EdonishAutoApp:
             dates = dates_data[0]["days"]
 
         self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
+        self.journal_clear_btn.visible = True
+        self._journal_loaded = True
 
-        header = f"{'N':<4} {'Ученик':<30}"
+        self._grid_rows = len(students)
+        self._grid_cols = len(dates)
+
+        # Build header row
+        header_cells = [
+            Container(
+                content=Text("#", size=12, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                width=40,
+                padding=4,
+                bgcolor=ft.Colors.BLUE_50,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(2, ft.Colors.BLUE_200),
+                ),
+            ),
+            Container(
+                content=Text("Ученик", size=12, weight=FontWeight.BOLD),
+                width=180,
+                padding=4,
+                bgcolor=ft.Colors.BLUE_50,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(2, ft.Colors.BLUE_200),
+                ),
+            ),
+        ]
         for d in dates:
-            date_str = d.get("assignmentDate", "")[5:]
-            header += f" {date_str:>6}"
-        header += f"  {'Чтв':>4}  {'Смст':>4}  {'Год':>4}"
-        lines.append(header)
-        lines.append("\u2500" * len(header))
+            date_str = d.get("assignmentDate", "")[5:]  # MM-DD
+            header_cells.append(
+                Container(
+                    content=Text(date_str, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    width=48,
+                    padding=2,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(2, ft.Colors.BLUE_200),
+                    ),
+                )
+            )
+        # Quarter/Semester/Year columns
+        for label in ["Чтв", "Смст", "Год"]:
+            header_cells.append(
+                Container(
+                    content=Text(label, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    width=44,
+                    padding=2,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(2, ft.Colors.BLUE_200),
+                    ),
+                )
+            )
 
+        header_row = Row(header_cells, spacing=0, alignment=MainAxisAlignment.START)
+
+        # Build student rows
+        student_rows = [header_row]
         total_marks = 0
         empty_cells = 0
 
-        for i, s in enumerate(students, 1):
-            name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
-            row = f"{i:<4} {name:<30}"
+        for row_idx, s in enumerate(students):
+            student_id = s["studentId"]
+            student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
+
+            # Build marks_by_date map: date_id -> mark info
             marks_by_date = {}
-            for m in s.get("subjectMarks", []):
-                marks_by_date[m["assignmentDateId"]] = m.get("shortName", "")
-            for d in dates:
-                mark = marks_by_date.get(d["assignmentDateId"], "")
-                if mark:
+            for m in (s.get("subjectMarks") or []):
+                marks_by_date[m.get("assignmentDateId")] = m
+
+            # Row number cell
+            row_cells = [
+                Container(
+                    content=Text(str(row_idx + 1), size=13, text_align=TextAlign.CENTER, color=ft.Colors.GREY_600),
+                    width=40,
+                    padding=4,
+                    bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    ),
+                ),
+                Container(
+                    content=Text(student_name, size=13, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    width=180,
+                    padding=4,
+                    bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    ),
+                ),
+            ]
+
+            # Date/grade cells
+            for col_idx, d in enumerate(dates):
+                date_id = d["assignmentDateId"]
+                mark_info = marks_by_date.get(date_id)
+                mark_value = mark_info.get("shortName", "") if mark_info else ""
+                mark_id = mark_info.get("id", "") if mark_info else ""
+                qprop_id = d.get("quarterPropertyId", self._current_journal_params.get("qprop_id", 0))
+
+                if mark_value:
                     total_marks += 1
                 else:
                     empty_cells += 1
-                row += f" {mark:>6}"
-            qm = s.get("quarterMark", [{}])
-            row += f"  {qm[0].get('shortName', ''):>4}" if qm else f"  {'':>4}"
-            sm = s.get("semesterMark", [{}])
-            row += f"  {sm[0].get('shortName', ''):>4}" if sm else f"  {'':>4}"
-            ym = s.get("yearMark", [{}])
-            row += f"  {ym[0].get('shortName', ''):>4}" if ym else f"  {'':>4}"
-            lines.append(row)
 
-        lines.append("")
-        lines.append(f"  Заполнено: {total_marks} | Пустых: {empty_cells} | Заполненность: {(total_marks/(total_marks+empty_cells)*100) if (total_marks+empty_cells)>0 else 0:.0f}%")
+                # Create editable grade cell
+                cell = self._make_grade_cell(
+                    row=row_idx, col=col_idx,
+                    value=mark_value,
+                    mark_id=mark_id,
+                    student_id=student_id,
+                    date_id=date_id,
+                    qprop_id=qprop_id,
+                )
+                row_cells.append(cell)
 
-        self.journal_text.value = "\n".join(lines)
+            # Quarter/Semester/Year mark cells (read-only display)
+            for mark_key in ["quarterMark", "semesterMark", "yearMark"]:
+                mark_list = s.get(mark_key, [])
+                mark_val = ""
+                if mark_list and len(mark_list) > 0:
+                    mark_val = mark_list[0].get("shortName", "")
+                row_cells.append(
+                    Container(
+                        content=Text(mark_val, size=14, weight=FontWeight.W_500, text_align=TextAlign.CENTER),
+                        width=44,
+                        padding=2,
+                        bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
+                        border=Border(
+                            right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                            bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        ),
+                    )
+                )
+
+            student_rows.append(Row(row_cells, spacing=0, alignment=MainAxisAlignment.START))
+
+        # Stats row
+        pct = (total_marks / (total_marks + empty_cells) * 100) if (total_marks + empty_cells) > 0 else 0
+        stats_row = Row([
+            Container(
+                content=Text(
+                    f"Заполнено: {total_marks} | Пустых: {empty_cells} | Заполненность: {pct:.0f}%",
+                    size=12, color=ft.Colors.GREY_600,
+                ),
+                padding=8,
+            ),
+        ], spacing=0)
+        student_rows.append(Container(height=8))
+        student_rows.append(stats_row)
+
+        # Help text
+        student_rows.append(Container(height=4))
+        student_rows.append(Text(
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить оценку | Enter: подтвердить",
+            size=11, color=ft.Colors.GREY_400,
+        ))
+
+        # Set the grid
+        self.journal_grid_container.content = Column(
+            student_rows,
+            scroll=ScrollMode.AUTO,
+            expand=True,
+            spacing=0,
+        )
+
         self._log_message(f"Журнал загружен: {total_marks} оценок, {empty_cells} пустых")
+
+        # Update dashboard keyboard handler to include grid navigation
+        self.page.on_keyboard_event = self._on_dashboard_keyboard
+
         try:
             self.page.update()
         except Exception:
             pass
+
+    def _make_grade_cell(self, row, col, value, mark_id, student_id, date_id, qprop_id):
+        """Create a single editable grade cell (TextField)."""
+        has_mark = bool(value and str(value).strip())
+        cell_bgcolor = ft.Colors.GREEN_50 if has_mark else (
+            ft.Colors.GREY_50 if row % 2 == 0 else ft.Colors.SURFACE
+        )
+
+        # Store data for this cell
+        self._grade_data[(row, col)] = {
+            "mark_id": mark_id,
+            "student_id": student_id,
+            "date_id": date_id,
+            "qprop_id": qprop_id,
+            "current_value": value,
+            "original_value": value,
+        }
+
+        cell = TextField(
+            value=str(value) if value else "",
+            width=48,
+            height=38,
+            text_size=15,
+            text_align=TextAlign.CENTER,
+            text_vertical_align=ft.VerticalAlignment.CENTER,
+            border_radius=4,
+            border_color=ft.Colors.TRANSPARENT,
+            focused_border_color=ft.Colors.BLUE_600,
+            content_padding=ft.padding.only(left=2, right=2, top=4, bottom=4),
+            bgcolor=cell_bgcolor,
+            input_filter=ft.NumbersOnlyInputFilter(),
+            max_length=2,
+            on_focus=lambda e, r=row, c=col: self._on_cell_focus(r, c),
+            on_submit=lambda e, r=row, c=col: self._on_cell_submit(r, c, e),
+            on_change=lambda e, r=row, c=col: self._on_cell_change(r, c, e),
+        )
+
+        self._grade_cells[(row, col)] = cell
+        return cell
+
+    def _on_cell_focus(self, row, col):
+        """Handle cell focus — track selected cell for arrow navigation."""
+        self._selected_cell = (row, col)
+
+    def _on_cell_change(self, row, col, e):
+        """Handle typing in a cell — auto-submit if valid grade digit entered."""
+        val = e.control.value
+        if val and val.strip():
+            digit = val.strip()
+            if digit.isdigit():
+                grade = int(digit)
+                if MIN_GRADE <= grade <= MAX_GRADE:
+                    # Valid grade — submit it
+                    self._set_cell_grade(row, col, grade)
+                elif grade > MAX_GRADE:
+                    # Too high — clamp
+                    e.control.value = ""
+                    self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
+                    try:
+                        self.page.update()
+                    except Exception:
+                        pass
+
+    def _on_cell_submit(self, row, col, e):
+        """Handle Enter key on a cell — submit the grade."""
+        val = e.control.value
+        if val and val.strip() and val.strip().isdigit():
+            grade = int(val.strip())
+            if MIN_GRADE <= grade <= MAX_GRADE:
+                self._set_cell_grade(row, col, grade)
+            else:
+                self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE}")
+                e.control.value = self._grade_data[(row, col)].get("current_value", "")
+                self.page.update()
+
+    def _set_cell_grade(self, row, col, grade):
+        """Set a grade for a cell via API call."""
+        data = self._grade_data.get((row, col))
+        if not data:
+            return
+
+        cell = self._grade_cells.get((row, col))
+        if not cell:
+            return
+
+        cell.border_color = ft.Colors.ORANGE_400
+        self.page.update()
+
+        def do_set():
+            try:
+                result = self.api.create_mark(
+                    student_id=data["student_id"],
+                    assignment_date_id=data["date_id"],
+                    mark=grade,
+                    quarter_property_id=data["qprop_id"],
+                )
+                if result and not (isinstance(result, dict) and result.get("error")):
+                    data["current_value"] = str(grade)
+                    data["mark_id"] = result.get("id", "") if isinstance(result, dict) else ""
+                    cell.value = str(grade)
+                    cell.bgcolor = ft.Colors.GREEN_50
+                    cell.border_color = ft.Colors.TRANSPARENT
+                    self._log_message(f"Оценка {grade} поставлена (строка {row + 1})")
+                    # Move to next cell
+                    self._move_to_cell(row, col + 1)
+                else:
+                    cell.border_color = ft.Colors.RED_400
+                    self._log_message(f"Ошибка установки оценки: {result}", "error")
+            except Exception as ex:
+                cell.border_color = ft.Colors.RED_400
+                self._log_message(f"Ошибка: {ex}", "error")
+            finally:
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
+
+        threading.Thread(target=do_set, daemon=True).start()
+
+    def _delete_cell_grade(self, row, col):
+        """Delete the grade from a cell via API call."""
+        data = self._grade_data.get((row, col))
+        if not data:
+            return
+
+        cell = self._grade_cells.get((row, col))
+        if not cell:
+            return
+
+        mark_id = data.get("mark_id", "")
+        if not mark_id:
+            # No grade to delete — just clear the cell visually
+            cell.value = ""
+            data["current_value"] = ""
+            self.page.update()
+            return
+
+        cell.border_color = ft.Colors.RED_400
+        self.page.update()
+
+        def do_delete():
+            try:
+                result = self.api.delete_mark(mark_id=mark_id)
+                cell.value = ""
+                cell.bgcolor = ft.Colors.GREY_50 if row % 2 == 0 else ft.Colors.SURFACE
+                cell.border_color = ft.Colors.TRANSPARENT
+                data["current_value"] = ""
+                data["mark_id"] = ""
+                self._log_message(f"Оценка удалена (строка {row + 1}, столбец {col + 1})")
+            except Exception as ex:
+                cell.border_color = ft.Colors.RED_400
+                self._log_message(f"Ошибка удаления: {ex}", "error")
+            finally:
+                try:
+                    self.page.update()
+                except Exception:
+                    pass
+
+        threading.Thread(target=do_delete, daemon=True).start()
+
+    def _move_to_cell(self, row, col):
+        """Move focus to a specific cell in the grid."""
+        # Wrap around
+        if col >= self._grid_cols:
+            col = 0
+            row += 1
+        if row >= self._grid_rows:
+            row = 0
+        if row < 0:
+            row = self._grid_rows - 1
+        if col < 0:
+            col = self._grid_cols - 1
+
+        target = self._grade_cells.get((row, col))
+        if target:
+            self._selected_cell = (row, col)
+            target.focus()
+
+    def _on_clear_all_grades(self):
+        """Clear all grades in the current journal view with confirmation."""
+        if not self._journal_loaded:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        # Confirmation dialog
+        self._clear_dialog = AlertDialog(
+            modal=True,
+            title=Text("Очистить все оценки", weight=FontWeight.W_700),
+            content=Text(
+                "Вы уверены, что хотите удалить ВСЕ оценки\n"
+                "из загруженного журнала?\n\n"
+                "Это действие нельзя отменить!",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_clear_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Очистить все", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.RED_600),
+                    on_click=lambda _: self._confirm_clear_all(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._clear_dialog)
+        self._clear_dialog.open = True
+        self.page.update()
+
+    def _close_clear_dialog(self):
+        if hasattr(self, '_clear_dialog') and self._clear_dialog:
+            self._clear_dialog.open = False
+            self.page.update()
+
+    def _confirm_clear_all(self):
+        self._close_clear_dialog()
+        # Delete all grades that have mark_ids
+        marks_to_delete = []
+        for (row, col), data in self._grade_data.items():
+            if data.get("mark_id"):
+                marks_to_delete.append(data["mark_id"])
+
+        if not marks_to_delete:
+            self._show_snackbar("Нет оценок для удаления")
+            return
+
+        self._log_message(f"Удаление {len(marks_to_delete)} оценок из журнала...")
+        self.journal_clear_btn.disabled = True
+        self.page.update()
+
+        def run():
+            deleted = 0
+            failed = 0
+            for mark_id in marks_to_delete:
+                try:
+                    self.api.delete_mark(mark_id=mark_id)
+                    deleted += 1
+                except Exception as e:
+                    failed += 1
+                    self._log_message(f"Ошибка удаления: {e}", "error")
+                time.sleep(0.1)
+
+            self._log_message(f"Удаление завершено: {deleted} удалено, {failed} ошибок")
+            self.journal_clear_btn.disabled = False
+            # Reload journal to reflect changes
+            self._on_load_journal()
+
+        threading.Thread(target=run, daemon=True).start()
 
     # ════════════════════════════════════════════════════════════════
     #  CALLBACKS

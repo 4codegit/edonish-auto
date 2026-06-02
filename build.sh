@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION="3.3.0"
+VERSION="3.4.0"
 APP_NAME="edonish-auto"
 APP_TITLE="eDonish Auto"
 DIST_DIR="$SCRIPT_DIR/dist"
@@ -235,7 +235,7 @@ _create_macos_dmg_script() {
     cat > "$DIST_DIR/macos/build_dmg.sh" << 'DMGEOF'
 #!/bin/bash
 set -e
-VERSION="3.3.0"
+VERSION="3.4.0"
 APP_NAME="edonish-auto"
 APP_TITLE="eDonish Auto"
 
