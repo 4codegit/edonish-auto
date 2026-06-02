@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════
 
 !define APPNAME "eDonish Auto"
-!define APPVERSION "3.0.2"
+!define APPVERSION "3.0.3"
 !define APPEXE "edonish-auto.exe"
 !define COMPANY "Edonish Auto Team"
 
@@ -64,7 +64,7 @@ Section "Core Files" SecCore
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" \
         "DisplayIcon" "$INSTDIR\${APPEXE}"
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" \
-        "EstimatedSize" 150000
+        "EstimatedSize" 56000
 SectionEnd
 
 Section "Uninstall"
