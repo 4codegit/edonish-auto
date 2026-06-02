@@ -12,9 +12,6 @@
 ; Modern UI
 !include "MUI2.nsh"
 
-!define MUI_ICON "icon.ico"
-!define MUI_UNICON "icon.ico"
-
 ; Installer pages
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"
