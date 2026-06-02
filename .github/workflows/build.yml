@@ -252,18 +252,22 @@ jobs:
             Автоматизация электронного журнала edonish.tj
 
             ### Что нового:
+            - Windows-установщик теперь на Inno Setup (вместо NSIS)
             - Исправлена ошибка запуска GUI (Flutter Engine встроен в сборку через flet pack)
             - Исправлена ошибка SSL при загрузке Flutter Engine (monkey-patch ssl.create_default_context)
             - Заменён ft.app() на ft.run() (устаревший API)
             - Добавлена автоматическая установка FLET_VIEW_PATH для PyInstaller
 
             ### Установка:
-            - **Windows**: Скачайте `edonish-auto.exe`, запустите
+            - **Windows**: Скачайте `edonish-auto-3.0.2-setup.exe`, запустите установщик
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
 
-            ### CLI режим:
+            ### CLI режим (Windows):
+            После установки CLI доступен в папке программы или через меню Пуск
+
+            ### CLI режим (Linux/macOS):
             ```bash
             edonish-auto-cli --login YOUR_LOGIN --password YOUR_PASSWORD
             ```
