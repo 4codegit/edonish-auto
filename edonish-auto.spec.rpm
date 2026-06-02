@@ -59,6 +59,15 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
+* Tue Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.8.0-1
+- Fixed grade insertion with delete+create overwrite mode
+- Fixed progress bar showing fill percentage and warnings
+- Fixed journal grade changes not being saved to server
+- Fixed RuntimeWarning coroutine focus was never awaited
+- Fixed SnackBar notifications not visible (open=True)
+- Added Save button and Ctrl+S for all modified grades
+- Added warning when all cells already filled
+
 * Mon Jun 02 2026 Kamar Narziev <kamar@edonish.tj> - 3.7.0-1
 - Fixed Flutter Engine bundling (flet pack replaces raw PyInstaller)
 - Fixed SSL certificate verification for Flutter Engine download
