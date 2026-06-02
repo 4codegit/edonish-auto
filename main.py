@@ -439,8 +439,10 @@ class EdonishAutoApp:
 
         # ── Action buttons ──────────────────────────────────────────
         self.analyze_btn = ElevatedButton(
-            content=ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
-            icon=Icons.SEARCH,
+            content=ft.Row([
+                ft.Icon(Icons.SEARCH, size=18),
+                ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=14,
@@ -448,8 +450,10 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_analyze(),
         )
         self.start_btn = FilledButton(
-            content=ft.Text("Запустить", size=15, weight=FontWeight.W_600),
-            icon=Icons.PLAY_ARROW,
+            content=ft.Row([
+                ft.Icon(Icons.PLAY_ARROW, size=18),
+                ft.Text("Запустить", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=14,
@@ -459,8 +463,10 @@ class EdonishAutoApp:
             disabled=True,
         )
         self.stop_btn = OutlinedButton(
-            content=ft.Text("Стоп", size=15, weight=FontWeight.W_600),
-            icon=Icons.STOP,
+            content=ft.Row([
+                ft.Icon(Icons.STOP, size=18),
+                ft.Text("Стоп", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
                 padding=14,
@@ -576,8 +582,10 @@ class EdonishAutoApp:
             options=[dropdown.Option("Выберите...")],
         )
         self.journal_load_btn = FilledButton(
-            content=ft.Text("Загрузить", size=15, weight=FontWeight.W_500),
-            icon=Icons.DOWNLOAD,
+            content=ft.Row([
+                ft.Icon(Icons.DOWNLOAD, size=18),
+                ft.Text("Загрузить", size=15, weight=FontWeight.W_500),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
             ),
@@ -648,8 +656,10 @@ class EdonishAutoApp:
         )
 
         clear_btn = OutlinedButton(
-            content=ft.Text("Очистить", size=14),
-            icon=Icons.DELETE_OUTLINE,
+            content=ft.Row([
+                ft.Icon(Icons.DELETE_OUTLINE, size=16),
+                ft.Text("Очистить", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
