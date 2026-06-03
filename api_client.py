@@ -277,16 +277,68 @@ class EdonishAPI:
                 params={"mark_id": mark_id, "school_id": self.school_id},
             )
 
-    def delete_quarter_mark(self, quarter_mark_id) -> Optional[Dict]:
-        """Delete a quarter (четвертная) mark by its ID.
+    def delete_quarter_mark(
+        self,
+        quarter_mark_id,
+        student_id: int = None,
+        quarter_property_id: int = None,
+        subject_id: int = None,
+        curriculum_property_id: int = None,
+    ) -> Optional[Dict]:
+        """Delete a quarter (четвертная) mark.
 
-        Tries the dedicated quarter-mark endpoint first, then falls back
-        to the generic mark-delete endpoint with quarter_mark_id.
+        The edonish.tj API requires full context (student_id, quarter_property_id,
+        subject_id, curriculum_property_id) for deleting quarter marks, not just
+        the mark_id. We try the dedicated quarter-mark endpoint first, then
+        fall back to the generic mark-delete endpoint.
         """
         # Ensure string type
         qmid = str(quarter_mark_id) if quarter_mark_id else ""
 
-        # Attempt 1: dedicated quarter-mark delete endpoint with JSON body
+        # Build the full body matching the create format (but with quarter_mark_id)
+        full_body = {}
+        if student_id is not None:
+            full_body["group_subgroup_student_id"] = student_id
+        if quarter_property_id is not None:
+            full_body["quarter_property_id"] = quarter_property_id
+        if subject_id is not None:
+            full_body["subject_id"] = subject_id
+        if curriculum_property_id is not None:
+            full_body["curriculum_property_id"] = curriculum_property_id
+
+        # ── Attempt 1: dedicated quarter-mark endpoint with full body + quarter_mark_id ──
+        if full_body:
+            body1 = {**full_body, "quarter_mark_id": qmid}
+            try:
+                result = self._request(
+                    "POST",
+                    self._url(JOURNAL_QUARTER_DELETE),
+                    params={"school_id": self.school_id},
+                    json=body1,
+                )
+                if result is not None:
+                    logger.info(f"delete_quarter_mark: succeeded via attempt 1 (full body + quarter_mark_id)")
+                    return result
+            except Exception as e:
+                logger.debug(f"delete_quarter_mark: attempt 1 failed: {e}")
+
+        # ── Attempt 2: dedicated endpoint with full body + mark_id key ──
+        if full_body:
+            body2 = {**full_body, "mark_id": qmid}
+            try:
+                result = self._request(
+                    "POST",
+                    self._url(JOURNAL_QUARTER_DELETE),
+                    params={"school_id": self.school_id},
+                    json=body2,
+                )
+                if result is not None:
+                    logger.info(f"delete_quarter_mark: succeeded via attempt 2 (full body + mark_id)")
+                    return result
+            except Exception as e:
+                logger.debug(f"delete_quarter_mark: attempt 2 failed: {e}")
+
+        # ── Attempt 3: dedicated endpoint, only quarter_mark_id in body ──
         try:
             result = self._request(
                 "POST",
@@ -295,11 +347,12 @@ class EdonishAPI:
                 json={"quarter_mark_id": qmid},
             )
             if result is not None:
+                logger.info(f"delete_quarter_mark: succeeded via attempt 3 (quarter_mark_id only)")
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"delete_quarter_mark: attempt 3 failed: {e}")
 
-        # Attempt 2: dedicated endpoint with different body key
+        # ── Attempt 4: dedicated endpoint with mark_id key in body ──
         try:
             result = self._request(
                 "POST",
@@ -308,23 +361,28 @@ class EdonishAPI:
                 json={"mark_id": qmid},
             )
             if result is not None:
+                logger.info(f"delete_quarter_mark: succeeded via attempt 4 (mark_id only)")
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"delete_quarter_mark: attempt 4 failed: {e}")
 
-        # Attempt 3: dedicated endpoint via query params
-        try:
-            result = self._request(
-                "POST",
-                self._url(JOURNAL_QUARTER_DELETE),
-                params={"quarter_mark_id": qmid, "school_id": self.school_id},
-            )
-            if result is not None:
-                return result
-        except Exception:
-            pass
+        # ── Attempt 5: generic mark delete with full body ──
+        if full_body:
+            body5 = {**full_body, "mark_id": qmid}
+            try:
+                result = self._request(
+                    "POST",
+                    self._url(JOURNAL_MARK_DELETE),
+                    params={"school_id": self.school_id},
+                    json=body5,
+                )
+                if result is not None:
+                    logger.info(f"delete_quarter_mark: succeeded via attempt 5 (generic + full body)")
+                    return result
+            except Exception as e:
+                logger.debug(f"delete_quarter_mark: attempt 5 failed: {e}")
 
-        # Attempt 4: fallback to generic mark delete endpoint
+        # ── Attempt 6: generic mark delete with mark_id in JSON body ──
         try:
             result = self._request(
                 "POST",
@@ -333,16 +391,24 @@ class EdonishAPI:
                 json={"mark_id": qmid},
             )
             if result is not None:
+                logger.info(f"delete_quarter_mark: succeeded via attempt 6 (generic + mark_id body)")
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"delete_quarter_mark: attempt 6 failed: {e}")
 
-        # Attempt 5: generic endpoint via query params
-        return self._request(
-            "POST",
-            self._url(JOURNAL_MARK_DELETE),
-            params={"mark_id": qmid, "school_id": self.school_id},
-        )
+        # ── Attempt 7: generic endpoint via query params ──
+        try:
+            result = self._request(
+                "POST",
+                self._url(JOURNAL_MARK_DELETE),
+                params={"mark_id": qmid, "school_id": self.school_id},
+            )
+            if result is not None:
+                logger.info(f"delete_quarter_mark: succeeded via attempt 7 (generic + query params)")
+                return result
+        except Exception as e:
+            logger.warning(f"delete_quarter_mark: all attempts failed for quarter_mark_id={qmid}: {e}")
+            raise
 
     def create_quarter_mark(
         self, student_id: int, quarter_property_id: int, mark: int,

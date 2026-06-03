@@ -1563,26 +1563,29 @@ class EdonishAutoApp:
         threading.Thread(target=do_set, daemon=True).start()
 
     def _on_delete_single_quarter_mark(self, row: int, quarter_mark_id: str):
-        """Delete a single student's quarter mark by double-clicking the quarter cell."""
+        """Delete a single student's quarter mark by long-pressing the quarter cell."""
         if not quarter_mark_id:
             self._show_snackbar("Нет четвертной оценки для удаления")
             return
 
         qdata = self._student_quarter_data.get(row)
         student_name = ""
-        if qdata:
-            # We only have student_id in qdata, fetch name from grid display would be complex
-            pass
 
         self._log_message(f"Удаление четвертной оценки (строка {row + 1})...")
 
         def do_delete():
             try:
-                result = self.api.delete_quarter_mark(quarter_mark_id=quarter_mark_id)
+                result = self.api.delete_quarter_mark(
+                    quarter_mark_id=quarter_mark_id,
+                    student_id=qdata.get("student_id") if qdata else None,
+                    quarter_property_id=qdata.get("qprop_id") if qdata else None,
+                    subject_id=qdata.get("subject_id") if qdata else None,
+                    curriculum_property_id=qdata.get("curriculum_property_id") if qdata else None,
+                )
                 self._log_message(f"✅ Четвертная оценка удалена (строка {row + 1})")
                 self._reload_journal()
             except Exception as ex:
-                self._log_message(f"Ошибка удаления четвертной: {ex}", "error")
+                self._log_message(f"❌ Ошибка удаления четвертной: {ex}", "error")
 
         threading.Thread(target=do_delete, daemon=True).start()
 
@@ -2651,6 +2654,7 @@ class EdonishAutoApp:
                 found = 0
 
                 for s in students:
+                    student_id = s["studentId"]
                     student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
                     quarter_marks = s.get("quarterMark") or []
                     for qm in quarter_marks:
@@ -2659,7 +2663,13 @@ class EdonishAutoApp:
                         if qm_id:
                             found += 1
                             try:
-                                self.api.delete_quarter_mark(quarter_mark_id=qm_id)
+                                self.api.delete_quarter_mark(
+                                    quarter_mark_id=qm_id,
+                                    student_id=student_id,
+                                    quarter_property_id=params.get("qprop_id"),
+                                    subject_id=params.get("subject_id"),
+                                    curriculum_property_id=params.get("curriculum_property_id", 0),
+                                )
                                 deleted += 1
                                 self._log_message(f"  🗑️ {student_name}: четвертная {qm_val or '?'} удалена (id={qm_id})")
                             except Exception as e:

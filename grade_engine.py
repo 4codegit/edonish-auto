@@ -769,6 +769,8 @@ class GradeEngine:
                                     subject_name=subject_name,
                                     group_name=group_name,
                                     result=qm_id,
+                                    subject_id=subject_id,
+                                    curriculum_property_id=subject.get("curriculumPropertyId", 0),
                                 )
                                 plan.add_task(task)
                                 total_to_delete += 1
@@ -792,7 +794,13 @@ class GradeEngine:
             try:
                 # Use dedicated quarter-mark deletion for quarter marks
                 if not task.assignment_date_id:
-                    result = self.api.delete_quarter_mark(quarter_mark_id=task.result)
+                    result = self.api.delete_quarter_mark(
+                        quarter_mark_id=task.result,
+                        student_id=task.student_id,
+                        quarter_property_id=task.quarter_property_id,
+                        subject_id=task.subject_id,
+                        curriculum_property_id=task.curriculum_property_id,
+                    )
                 else:
                     result = self.api.delete_mark(mark_id=task.result)
                 if result:
@@ -891,6 +899,8 @@ class GradeEngine:
                                     subject_name=subject_name,
                                     group_name=group_name,
                                     result=qm_id,
+                                    subject_id=subject_id,
+                                    curriculum_property_id=subject.get("curriculumPropertyId", 0),
                                 )
                                 plan.add_task(task)
                                 total_to_delete += 1
@@ -912,7 +922,13 @@ class GradeEngine:
 
             task.status = "running"
             try:
-                result = self.api.delete_quarter_mark(quarter_mark_id=task.result)
+                result = self.api.delete_quarter_mark(
+                    quarter_mark_id=task.result,
+                    student_id=task.student_id,
+                    quarter_property_id=task.quarter_property_id,
+                    subject_id=task.subject_id,
+                    curriculum_property_id=task.curriculum_property_id,
+                )
                 if result:
                     task.status = "success"
                     completed += 1
