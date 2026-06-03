@@ -45,6 +45,7 @@ if getattr(sys, 'frozen', False):
         os.environ['FLET_VIEW_PATH'] = _flet_view_dir
 
 import json
+import math
 import threading
 import logging
 import time
@@ -120,6 +121,7 @@ class EdonishAutoApp:
         self._grid_cols = 0
         self._journal_loaded = False
         self._current_journal_params = {}
+        self._student_quarter_data = {}  # row_idx -> {student_id, qprop_id, subject_id, curriculum_property_id, quarter_mark_id, quarter_mark_value}
 
         # Page config
         self.page.title = f"{APP_NAME} v{APP_VERSION}"
@@ -1498,10 +1500,18 @@ class EdonishAutoApp:
             return
 
         # Store for later API calls from cells
+        # Find curriculum_property_id for this subject
+        curriculum_property_id = 0
+        for ts in self.teacher_subjects:
+            if ts.get("subjectId") == subject_id:
+                curriculum_property_id = ts.get("curriculumPropertyId", 0)
+                break
+
         self._current_journal_params = {
             "group_id": group_id,
             "subject_id": subject_id,
             "qprop_id": qprop_id,
+            "curriculum_property_id": curriculum_property_id,
         }
 
         self._log_message("Загрузка журнала...")
@@ -1557,6 +1567,7 @@ class EdonishAutoApp:
         self._grade_cells = {}
         self._grade_data = {}
         self._selected_cell = None
+        self._student_quarter_data = {}
 
         if not students:
             self.journal_grid_container.content = Column(
@@ -1728,8 +1739,60 @@ class EdonishAutoApp:
                 )
                 row_cells.append(cell)
 
-            # Quarter/Semester/Year mark cells (read-only display)
-            for mark_key in ["quarterMark", "semesterMark", "yearMark"]:
+            # Quarter/Semester/Year mark cells
+            # Quarter mark cell: clickable to set ceil(average) as quarter grade
+            params = self._current_journal_params
+            quarter_mark_list = s.get("quarterMark", [])
+            quarter_mark_val = ""
+            quarter_mark_id = ""
+            if quarter_mark_list and len(quarter_mark_list) > 0:
+                quarter_mark_val = quarter_mark_list[0].get("shortName", "")
+                quarter_mark_id = quarter_mark_list[0].get("quarterMarkId", "") or quarter_mark_list[0].get("assignmentMarkId", "")
+
+            # Store quarter data for this student
+            self._student_quarter_data[row_idx] = {
+                "student_id": student_id,
+                "qprop_id": params.get("qprop_id", 0),
+                "subject_id": params.get("subject_id", 0),
+                "curriculum_property_id": params.get("curriculum_property_id", 0),
+                "quarter_mark_id": quarter_mark_id,
+                "quarter_mark_value": quarter_mark_val,
+            }
+
+            # Calculate ceil(average) for tooltip
+            grade_values = []
+            for m in (s.get("subjectMarks") or []):
+                sn = m.get("shortName", "")
+                if sn and sn.isdigit():
+                    v = int(sn)
+                    if MIN_GRADE <= v <= MAX_GRADE:
+                        grade_values.append(v)
+            if grade_values:
+                avg = sum(grade_values) / len(grade_values)
+                ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (нажмите чтобы поставить)"
+            else:
+                ceil_grade = None
+                quarter_tooltip = "Нет оценок для расчёта"
+
+            # Clickable quarter mark cell
+            quarter_bgcolor = ft.Colors.AMBER_50 if quarter_mark_val else (ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE)
+            quarter_cell = Container(
+                content=Text(quarter_mark_val, size=14, weight=FontWeight.W_500, text_align=TextAlign.CENTER),
+                width=44,
+                padding=2,
+                bgcolor=quarter_bgcolor,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                ),
+                tooltip=quarter_tooltip,
+                on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
+            )
+            row_cells.append(quarter_cell)
+
+            # Semester and Year mark cells (read-only display)
+            for mark_key in ["semesterMark", "yearMark"]:
                 mark_list = s.get(mark_key, [])
                 mark_val = ""
                 if mark_list and len(mark_list) > 0:
@@ -1766,7 +1829,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить оценку | Enter: подтвердить",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | 🎲: рандом | Клик на Чтв: ceil(средний балл)",
             size=11, color=ft.Colors.GREY_400,
         ))
 
@@ -1995,6 +2058,55 @@ class EdonishAutoApp:
 
         grade = weighted_random_grade()
         self._set_cell_grade(row, empty_col, grade)
+
+    def _on_set_quarter_mark(self, row: int):
+        """Set quarter mark for a student as ceil(average of their subject marks)."""
+        if not self._journal_loaded:
+            return
+
+        qdata = self._student_quarter_data.get(row)
+        if not qdata:
+            self._show_snackbar("Нет данных ученика")
+            return
+
+        # Calculate ceil(average) from current subject marks in the grid
+        grade_values = []
+        for col in range(self._grid_cols):
+            data = self._grade_data.get((row, col))
+            if data:
+                val = data.get("current_value", "")
+                if val and str(val).strip().isdigit():
+                    v = int(str(val).strip())
+                    if MIN_GRADE <= v <= MAX_GRADE:
+                        grade_values.append(v)
+
+        if not grade_values:
+            self._show_snackbar("У ученика нет оценок для расчёта четвертной")
+            return
+
+        avg = sum(grade_values) / len(grade_values)
+        grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+        self._log_message(f"Четвертная для строки {row + 1}: ср.={avg:.2f}, ceil={grade} (из {len(grade_values)} оценок)")
+
+        def do_set():
+            try:
+                result = self.api.create_quarter_mark(
+                    student_id=qdata["student_id"],
+                    quarter_property_id=qdata["qprop_id"],
+                    mark=grade,
+                    subject_id=qdata["subject_id"],
+                    curriculum_property_id=qdata["curriculum_property_id"],
+                )
+                if result and not (isinstance(result, dict) and result.get("error")):
+                    self._log_message(f"Четвертная оценка {grade} поставлена (строка {row + 1})")
+                    # Reload journal to show the updated quarter mark
+                    self._reload_journal()
+                else:
+                    self._log_message(f"Ошибка четвертной оценки: {result}", "error")
+            except Exception as ex:
+                self._log_message(f"Ошибка: {ex}", "error")
+
+        threading.Thread(target=do_set, daemon=True).start()
 
     def _move_to_cell(self, row, col):
         """Move focus to a specific cell in the grid."""

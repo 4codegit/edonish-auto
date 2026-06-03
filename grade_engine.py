@@ -1,5 +1,6 @@
 """Grade Engine - handles automated grade creation with parallel workers"""
 import random
+import math
 import time
 import logging
 import threading
@@ -320,7 +321,25 @@ class GradeEngine:
                         if fill_empty_only and quarter_marks and quarter_marks[0].get("shortName"):
                             continue
 
-                        grade = weighted_random_grade(min_grade, max_grade)
+                        # Calculate quarter grade as ceil(average of subject marks)
+                        subject_marks = student.get("subjectMarks") or []
+                        grade_values = []
+                        for m in subject_marks:
+                            sn = m.get("shortName", "")
+                            if sn and sn.isdigit():
+                                v = int(sn)
+                                if MIN_GRADE <= v <= MAX_GRADE:
+                                    grade_values.append(v)
+
+                        if grade_values:
+                            avg = sum(grade_values) / len(grade_values)
+                            grade = min(max(int(math.ceil(avg)), min_grade), max_grade)
+                            self._log(f"  📊 {student_name}: средний={avg:.2f} → ceil={grade} (из {len(grade_values)} оценок)")
+                        else:
+                            # No marks — fallback to weighted random
+                            grade = weighted_random_grade(min_grade, max_grade)
+                            self._log(f"  ⚠️ {student_name}: нет оценок, рандом={grade}")
+
                         curriculum_property_id = subject.get("curriculumPropertyId", 0)
                         task = GradeTask(
                             student_id=student_id,
