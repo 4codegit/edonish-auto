@@ -227,18 +227,44 @@ jobs:
 
       - name: Build Android APK with flet
         run: |
-          flet build apk \
+          flet build apk . \
             --project edonish-auto \
             --bundle-id tj.edonish.auto \
-            --product-name "eDonish Auto" \
-            --product-version "${{ env.APP_VERSION }}"
+            --product "eDonish Auto" \
+            --org tj.edonish \
+            --build-version "${{ env.APP_VERSION }}" \
+            --build-number 1 \
+            --exclude .github \
+            --exclude build \
+            --exclude dist \
+            --exclude __pycache__ \
+            --exclude .git \
+            --exclude Dockerfile \
+            --exclude docker-compose.yml \
+            --exclude edonish-auto.spec \
+            --exclude edonish-auto.spec.rpm \
+            --exclude edonish-auto-cli.spec \
+            --exclude installer.nsi \
+            --exclude package.sh \
+            --exclude build.sh \
+            --exclude Makefile \
+            --exclude run.sh \
+            --exclude debian.control \
+            --yes
 
       - name: Prepare APK artifact
         run: |
           mkdir -p dist/android
-          cp build/apk/edonish-auto.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk 2>/dev/null || \
-          cp build/apk/*.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk 2>/dev/null || \
-          find build/ -name "*.apk" -exec cp {} dist/android/edonish-auto-${{ env.APP_VERSION }}.apk \;
+          # flet build apk outputs to build/apk/ directory
+          APK_FILE=$(find build/apk/ -name "*.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ]; then
+            cp "$APK_FILE" dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
+            echo "APK found: $APK_FILE"
+          else
+            echo "ERROR: No APK found in build/apk/"
+            find build/ -name "*.apk" -type f 2>/dev/null || true
+            exit 1
+          fi
 
       - name: Report APK size
         run: |
