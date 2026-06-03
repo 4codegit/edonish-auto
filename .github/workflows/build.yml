@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.11.0
+  APP_VERSION: 3.18.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -228,23 +228,20 @@ jobs:
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.11.0:
-            - 🐛 Критический фикс: mark ID теперь использует `assignmentMarkId` (удаление оценок работает!)
-            - 🐛 Критический фикс: четвертные оценки — добавлены `mark_id`, `subject_id`, `curriculum_property_id` (422 ошибка исправлена!)
-            - 🐛 Критический фикс: quarter IDs теперь group-specific из journal_options (2 четверть теперь показывает даты!)
-            - 🔧 Фикс: subjects теперь содержат `curriculumPropertyId` из journal_options
-            - 🔧 Фикс: groups обогащаются вложенными quarters и subjects для корректных API вызовов
-            - 🔧 Фикс: журнал использует `assignmentMarkId` вместо `id` для mark_id
-
-            ### v3.10.0:
-            - 🐛 Критический фикс: правильное извлечение markId для удаления оценок
-            - 🔧 Фикс: обработчики dropdown on_select теперь корректно привязаны
+            ### Что нового в v3.18.0:
+            - 🧮 Четвертные оценки теперь правильно рассчитываются как ceil(среднее) вместо случайных!
+            - 🟡 Новая кнопка "Четвертные" — поставить четвертные оценки отдельно (ceil от среднего балла)
+            - 🟠 Новая кнопка "Удалить Чтв" — удалить ТОЛЬКО четвертные оценки (обычные не трогаются)
+            - 👆 Кликабельная ячейка "Чтв" в журнале — кликнуть = поставить четвертную (ceil)
+            - 🔄 Автообновление журнала после операций с четвертными
+            - 💡 Tooltip на ячейке Чтв показывает средний балл и расчёт
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
+            - **Android**: Скачайте `edonish-auto-*.apk`, включите установку из неизвестных источников
 
             ### Важно для Windows:
             Если .exe не запускается из-за ошибки DLL, установите:
@@ -255,5 +252,6 @@ jobs:
             release-artifacts/**/*.rpm
             release-artifacts/**/*.deb
             release-artifacts/**/*.zip
+            release-artifacts/**/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

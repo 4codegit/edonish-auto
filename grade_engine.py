@@ -320,7 +320,25 @@ class GradeEngine:
                         if fill_empty_only and quarter_marks and quarter_marks[0].get("shortName"):
                             continue
 
-                        grade = weighted_random_grade(min_grade, max_grade)
+                        # Calculate quarter grade as ceil(average of subject marks)
+                        subject_marks = student.get("subjectMarks") or []
+                        grade_values = []
+                        for m in subject_marks:
+                            sn = m.get("shortName", "")
+                            if sn and sn.isdigit():
+                                v = int(sn)
+                                if MIN_GRADE <= v <= MAX_GRADE:
+                                    grade_values.append(v)
+
+                        if grade_values:
+                            avg = sum(grade_values) / len(grade_values)
+                            grade = min(max(int(math.ceil(avg)), min_grade), max_grade)
+                            self._log(f"  📊 {student_name}: ср.={avg:.2f} → ceil={grade} ({len(grade_values)} оценок)")
+                        else:
+                            # No marks — fallback to weighted random
+                            grade = weighted_random_grade(min_grade, max_grade)
+                            self._log(f"  ⚠️ {student_name}: нет оценок, рандом={grade}")
+
                         curriculum_property_id = subject.get("curriculumPropertyId", 0)
                         task = GradeTask(
                             student_id=student_id,
@@ -793,4 +811,122 @@ class GradeEngine:
 
         self._running = False
         self._log(f"🏁 Удаление: ✅ {completed} удалено, ❌ {failed} ошибок")
+        return plan
+
+    def execute_delete_quarter_marks(
+        self,
+        groups: List[Dict],
+        subjects: List[Dict],
+        quarters: List[Dict],
+        task_delay: float = 0.15,
+    ) -> GradePlan:
+        """Delete ONLY quarter marks for selected group/subject/quarter combinations."""
+        self._running = True
+        self._stop_event.clear()
+        plan = GradePlan()
+        self._log("📋 Построение плана удаления ЧЕТВЕРТНЫХ оценок...")
+
+        total_to_delete = 0
+
+        for group in groups:
+            group_id = group["id"]
+            group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
+
+            group_quarters = group.get("quarters", quarters)
+            group_subjects = group.get("subjects", subjects)
+            if group_quarters is not quarters:
+                selected_quarter_names = {q.get("name") for q in quarters}
+                effective_quarters = [q for q in group_quarters if q.get("name") in selected_quarter_names] if selected_quarter_names else group_quarters
+            else:
+                effective_quarters = quarters
+            if group_subjects is not subjects:
+                selected_subject_ids = {s.get("subjectId") for s in subjects}
+                effective_subjects = [s for s in group_subjects if s.get("subjectId") in selected_subject_ids] if selected_subject_ids else group_subjects
+            else:
+                effective_subjects = subjects
+
+            for subject in effective_subjects:
+                subject_id = subject.get("subjectId", subject.get("id"))
+                subject_name = subject.get("subjectName", subject.get("name", ""))
+
+                for quarter in effective_quarters:
+                    qprop_id = quarter["qpropId"]
+                    quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
+
+                    self._log(f"🗑️ Четвертные: {group_name} | {subject_name} | {quarter_name}")
+
+                    try:
+                        students = self.api.get_journal_students(
+                            group_id=group_id,
+                            subject_id=subject_id,
+                            quarter_property_id=qprop_id,
+                        )
+                    except Exception as e:
+                        self._log(f"  ❌ Ошибка: {e}", "error")
+                        continue
+
+                    if not students:
+                        continue
+
+                    for student in students:
+                        student_id = student["studentId"]
+                        student_name = f"{student.get('lastName', '')} {student.get('firstName', '')}"
+
+                        # Collect quarter mark IDs only
+                        for qm in (student.get("quarterMark") or []):
+                            qm_id = qm.get("quarterMarkId") or qm.get("assignmentMarkId") or qm.get("id")
+                            if qm_id and qm.get("shortName"):
+                                task = GradeTask(
+                                    student_id=student_id,
+                                    student_name=student_name,
+                                    assignment_date_id="",
+                                    date_str=f"Чтв: {qm.get('shortName', '')}",
+                                    quarter_property_id=qprop_id,
+                                    mark=0,
+                                    subject_name=subject_name,
+                                    group_name=group_name,
+                                    result=qm_id,
+                                )
+                                plan.add_task(task)
+                                total_to_delete += 1
+
+        self._log(f"📋 Найдено {total_to_delete} четвертных оценок для удаления")
+
+        if total_to_delete == 0:
+            self._log("✅ Нет четвертных оценок для удаления")
+            self._running = False
+            return plan
+
+        # Execute deletions
+        completed = 0
+        failed = 0
+
+        for task in plan.tasks:
+            if self._stop_event.is_set():
+                break
+
+            task.status = "running"
+            try:
+                result = self.api.delete_mark(mark_id=task.result)
+                if result:
+                    task.status = "success"
+                    completed += 1
+                    plan.completed = completed
+                    self._log(f"  🗑️ {task.student_name} — четвертная удалена ({task.date_str})")
+                else:
+                    task.status = "error"
+                    failed += 1
+                    plan.failed = failed
+            except Exception as e:
+                task.status = "error"
+                task.error = str(e)
+                failed += 1
+                plan.failed = failed
+                self._log(f"  ❌ {task.student_name}: {e}", "error")
+
+            self._update_progress(plan)
+            time.sleep(task_delay)
+
+        self._running = False
+        self._log(f"🏁 Удаление четвертных: ✅ {completed} удалено, ❌ {failed} ошибок")
         return plan

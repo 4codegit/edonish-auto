@@ -567,10 +567,36 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_sign(),
             disabled=True,
         )
+        self.quarter_marks_btn = FilledButton(
+            content=ft.Row([
+                ft.Icon(Icons.CALCULATE, size=18),
+                ft.Text("Четвертные", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=14,
+                bgcolor=ft.Colors.AMBER_600,
+            ),
+            on_click=lambda _: self._on_set_quarter_marks(),
+            tooltip="Поставить четвертные оценки (ceil от среднего)",
+        )
+        self.delete_quarter_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.REMOVE_CIRCLE_OUTLINE, size=18),
+                ft.Text("Удалить Чтв", size=15, weight=FontWeight.W_600),
+            ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=14,
+                color=ft.Colors.ORANGE_700,
+            ),
+            on_click=lambda _: self._on_delete_quarter_marks(),
+            tooltip="Удалить ТОЛЬКО четвертные оценки",
+        )
         self.delete_btn = OutlinedButton(
             content=ft.Row([
                 ft.Icon(Icons.DELETE_FOREVER, size=18),
-                ft.Text("Удалить", size=15, weight=FontWeight.W_600),
+                ft.Text("Удалить все", size=15, weight=FontWeight.W_600),
             ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
@@ -594,13 +620,15 @@ class EdonishAutoApp:
                         self.stop_btn,
                         Container(width=12),
                         self.signature_btn,
-                    ], alignment=MainAxisAlignment.START),
+                    ], alignment=MainAxisAlignment.START, wrap=True),
                     Container(height=8),
                     Row([
-                        self.delete_btn,
+                        self.quarter_marks_btn,
                         Container(width=12),
-                        Text("Del — удалить оценки", size=12, color=ft.Colors.GREY_500),
-                    ], alignment=MainAxisAlignment.START),
+                        self.delete_quarter_btn,
+                        Container(width=12),
+                        self.delete_btn,
+                    ], alignment=MainAxisAlignment.START, wrap=True),
                 ]),
             ),
         )
@@ -1239,6 +1267,260 @@ class EdonishAutoApp:
         self.page.run_thread(self._safe_update)
 
     # ════════════════════════════════════════════════════════════════
+    #  QUARTER MARKS
+    # ════════════════════════════════════════════════════════════════
+
+    def _on_set_quarter_marks(self):
+        """Set quarter marks for all selected groups/subjects/quarters (ceil of average)."""
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        if not groups or not subjects or not quarters:
+            self._show_snackbar("Выберите класс, предмет и четверть!")
+            return
+
+        self.quarter_marks_btn.disabled = True
+        self.start_btn.disabled = True
+        self.analyze_btn.disabled = True
+        self.delete_quarter_btn.disabled = True
+        self.stop_btn.disabled = False
+        self.progress_label.value = "Расчёт четвертных оценок..."
+        self.progress_pct.color = ft.Colors.AMBER_600
+        self.page.update()
+
+        def run():
+            try:
+                # Step 1: Wait for edonish API to sync (if grades were just inserted)
+                self._log_message("Запрос свежих данных с edonish...")
+                time.sleep(1)
+
+                # Step 2: Build quarter marks plan using ceil(average)
+                qplan = self.engine.build_grade_plan_for_quarter_marks(
+                    groups=groups,
+                    subjects=subjects,
+                    quarters=quarters,
+                    min_grade=int(self.min_grade_field.value or MIN_GRADE),
+                    max_grade=int(self.max_grade_field.value or MAX_GRADE),
+                    fill_empty_only=self.fill_empty_check.value,
+                )
+                if qplan.total_tasks > 0:
+                    self._log_message(f"Установка {qplan.total_tasks} четвертных оценок...")
+                    self.engine.execute_quarter_marks(qplan)
+                else:
+                    self._log_message("Все четвертные оценки уже поставлены")
+            except Exception as e:
+                self._log_message(f"Ошибка четвертных: {e}", "error")
+            finally:
+                self._on_set_quarter_marks_complete()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_set_quarter_marks_complete(self):
+        self.quarter_marks_btn.disabled = False
+        self.start_btn.disabled = False
+        self.stop_btn.disabled = True
+        self.analyze_btn.disabled = False
+        self.delete_quarter_btn.disabled = False
+        self.progress_pct.color = ft.Colors.BLUE_600
+        self.progress_label.value = "Четвертные оценки поставлены"
+        # Reload journal if loaded
+        if self._journal_loaded and self._current_journal_params:
+            self._log_message("Обновление журнала...")
+            self._reload_journal()
+        self.page.run_thread(self._safe_update)
+
+    def _on_delete_quarter_marks(self):
+        """Delete ONLY quarter marks for selected groups/subjects/quarters."""
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        if not groups or not subjects or not quarters:
+            self._show_snackbar("Выберите класс, предмет и четверть!")
+            return
+
+        # Confirmation dialog
+        self._del_qt_dialog = AlertDialog(
+            modal=True,
+            title=Text("Удаление четвертных оценок", weight=FontWeight.W_700),
+            content=Text(
+                "Удалить ТОЛЬКО четвертные оценки\n"
+                "для выбранных класса, предмета и четверти?\n\n"
+                "Обычные оценки НЕ будут затронуты.",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_del_qt_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Удалить четвертные", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.ORANGE_600),
+                    on_click=lambda _: self._confirm_delete_quarter_marks(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._del_qt_dialog)
+        self._del_qt_dialog.open = True
+        self.page.update()
+
+    def _close_del_qt_dialog(self):
+        if hasattr(self, '_del_qt_dialog') and self._del_qt_dialog:
+            self._del_qt_dialog.open = False
+            self.page.update()
+
+    def _confirm_delete_quarter_marks(self):
+        self._close_del_qt_dialog()
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
+        self.delete_quarter_btn.disabled = True
+        self.quarter_marks_btn.disabled = True
+        self.start_btn.disabled = True
+        self.analyze_btn.disabled = True
+        self.stop_btn.disabled = False
+        self.progress_label.value = "Удаление четвертных оценок..."
+        self.progress_pct.value = "0%"
+        self.progress_pct.color = ft.Colors.ORANGE_600
+        self.page.update()
+
+        def run():
+            try:
+                self.engine.execute_delete_quarter_marks(
+                    groups=groups,
+                    subjects=subjects,
+                    quarters=quarters,
+                )
+            except Exception as e:
+                self._log_message(f"Ошибка удаления четвертных: {e}", "error")
+            finally:
+                self._on_delete_quarter_marks_complete()
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_delete_quarter_marks_complete(self):
+        self.delete_quarter_btn.disabled = False
+        self.quarter_marks_btn.disabled = False
+        self.start_btn.disabled = False
+        self.stop_btn.disabled = True
+        self.analyze_btn.disabled = False
+        self.progress_pct.color = ft.Colors.BLUE_600
+        self.progress_label.value = "Четвертные удалены"
+        # Reload journal if loaded
+        if self._journal_loaded and self._current_journal_params:
+            self._log_message("Обновление журнала...")
+            self._reload_journal()
+        self.page.run_thread(self._safe_update)
+
+    def _on_set_quarter_mark(self, row: int):
+        """Set quarter mark for a single student as ceil(average of their subject marks).
+        
+        Fetches fresh data from edonish API first, then calculates ceil(average).
+        """
+        if not self._journal_loaded:
+            return
+
+        qdata = self._student_quarter_data.get(row)
+        if not qdata:
+            self._show_snackbar("Нет данных ученика")
+            return
+
+        params = self._current_journal_params
+        student_id = qdata["student_id"]
+
+        self._log_message(f"Запрос данных с edonish для расчёта четвертной (строка {row + 1})...")
+
+        def do_set():
+            try:
+                # Step 1: Fetch FRESH student data from edonish API
+                students = self.api.get_journal_students(
+                    group_id=params["group_id"],
+                    subject_id=params["subject_id"],
+                    quarter_property_id=params["qprop_id"],
+                )
+
+                # Step 2: Find our student in the fresh data
+                student = None
+                for s in (students or []):
+                    if s.get("studentId") == student_id:
+                        student = s
+                        break
+
+                if not student:
+                    self._log_message(f"Ученик не найден в ответе API (строка {row + 1})", "error")
+                    return
+
+                # Step 3: Extract grades from fresh API response
+                grade_values = []
+                for m in (student.get("subjectMarks") or []):
+                    sn = m.get("shortName", "")
+                    if sn and sn.isdigit():
+                        v = int(sn)
+                        if MIN_GRADE <= v <= MAX_GRADE:
+                            grade_values.append(v)
+
+                if not grade_values:
+                    self._log_message(f"У ученика нет оценок для расчёта четвертной (строка {row + 1})", "error")
+                    return
+
+                # Step 4: Calculate ceil(average)
+                avg = sum(grade_values) / len(grade_values)
+                grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                self._log_message(
+                    f"Четвертная (строка {row + 1}): оценки={grade_values}, "
+                    f"ср.={avg:.2f}, ceil={grade}"
+                )
+
+                # Step 5: Save quarter mark to edonish
+                result = self.api.create_quarter_mark(
+                    student_id=student_id,
+                    quarter_property_id=qdata["qprop_id"],
+                    mark=grade,
+                    subject_id=qdata["subject_id"],
+                    curriculum_property_id=qdata["curriculum_property_id"],
+                )
+                if result and not (isinstance(result, dict) and result.get("error")):
+                    self._log_message(f"✅ Четвертная оценка {grade} поставлена (строка {row + 1})")
+                    # Reload journal to show the updated quarter mark
+                    self._reload_journal()
+                else:
+                    self._log_message(f"Ошибка четвертной оценки: {result}", "error")
+            except Exception as ex:
+                self._log_message(f"Ошибка: {ex}", "error")
+
+        threading.Thread(target=do_set, daemon=True).start()
+
+    def _reload_journal(self):
+        """Reload the journal using the stored params (after grade operations)."""
+        params = self._current_journal_params
+        if not params:
+            return
+        group_id = params["group_id"]
+        subject_id = params["subject_id"]
+        qprop_id = params["qprop_id"]
+
+        def load():
+            try:
+                students = self.api.get_journal_students(
+                    group_id=group_id,
+                    subject_id=subject_id,
+                    quarter_property_id=qprop_id,
+                )
+                dates_data = self.api.get_journal_dates(
+                    group_id=group_id,
+                    subject_id=subject_id,
+                    quarter_property_id=qprop_id,
+                )
+                self._display_journal_grid(students, dates_data)
+            except Exception as e:
+                self._log_message(f"Ошибка обновления журнала: {e}", "error")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    # ════════════════════════════════════════════════════════════════
     #  GRADE AUTOMATION
     # ════════════════════════════════════════════════════════════════
 
@@ -1494,11 +1776,21 @@ class EdonishAutoApp:
             return
 
         # Store for later API calls from cells
+        # Find curriculum_property_id for this subject
+        curriculum_property_id = 0
+        for ts in self.teacher_subjects:
+            if ts.get("subjectId") == subject_id:
+                curriculum_property_id = ts.get("curriculumPropertyId", 0)
+                break
+
         self._current_journal_params = {
             "group_id": group_id,
             "subject_id": subject_id,
             "qprop_id": qprop_id,
+            "curriculum_property_id": curriculum_property_id,
         }
+
+        self._student_quarter_data = {}  # row_idx -> {student_id, qprop_id, subject_id, curriculum_property_id, quarter_mark_id, quarter_mark_value}
 
         self._log_message("Загрузка журнала...")
 
@@ -1526,6 +1818,7 @@ class EdonishAutoApp:
         self._grade_cells = {}
         self._grade_data = {}
         self._selected_cell = None
+        self._student_quarter_data = {}
 
         if not students:
             self.journal_grid_container.content = Column(
@@ -1666,8 +1959,59 @@ class EdonishAutoApp:
                 )
                 row_cells.append(cell)
 
-            # Quarter/Semester/Year mark cells (read-only display)
-            for mark_key in ["quarterMark", "semesterMark", "yearMark"]:
+            # Quarter mark cell: clickable to set ceil(average) as quarter grade
+            params = self._current_journal_params
+            quarter_mark_list = s.get("quarterMark", [])
+            quarter_mark_val = ""
+            quarter_mark_id = ""
+            if quarter_mark_list and len(quarter_mark_list) > 0:
+                quarter_mark_val = quarter_mark_list[0].get("shortName", "")
+                quarter_mark_id = quarter_mark_list[0].get("quarterMarkId", "") or quarter_mark_list[0].get("assignmentMarkId", "")
+
+            # Store quarter data for this student
+            self._student_quarter_data[row_idx] = {
+                "student_id": student_id,
+                "qprop_id": params.get("qprop_id", 0),
+                "subject_id": params.get("subject_id", 0),
+                "curriculum_property_id": params.get("curriculum_property_id", 0),
+                "quarter_mark_id": quarter_mark_id,
+                "quarter_mark_value": quarter_mark_val,
+            }
+
+            # Calculate ceil(average) for tooltip
+            grade_values = []
+            for m in (s.get("subjectMarks") or []):
+                sn = m.get("shortName", "")
+                if sn and sn.isdigit():
+                    v = int(sn)
+                    if MIN_GRADE <= v <= MAX_GRADE:
+                        grade_values.append(v)
+            if grade_values:
+                avg = sum(grade_values) / len(grade_values)
+                ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить)"
+            else:
+                ceil_grade = None
+                quarter_tooltip = "Нет оценок для расчёта"
+
+            # Clickable quarter mark cell
+            quarter_bgcolor = ft.Colors.AMBER_50 if quarter_mark_val else (ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE)
+            quarter_cell = Container(
+                content=Text(quarter_mark_val, size=14, weight=FontWeight.W_500, text_align=TextAlign.CENTER),
+                width=44,
+                padding=2,
+                bgcolor=quarter_bgcolor,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                ),
+                tooltip=quarter_tooltip,
+                on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
+            )
+            row_cells.append(quarter_cell)
+
+            # Semester and Year mark cells (read-only display)
+            for mark_key in ["semesterMark", "yearMark"]:
                 mark_list = s.get(mark_key, [])
                 mark_val = ""
                 if mark_list and len(mark_list) > 0:
@@ -1704,7 +2048,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить оценку | Enter: подтвердить",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить четвертную",
             size=11, color=ft.Colors.GREY_400,
         ))
 
