@@ -749,6 +749,54 @@ class EdonishAutoApp:
 
         self.journal_student_count = Text("", size=13, color=ft.Colors.GREY_500)
 
+        # ── Topics / Homework controls ──
+        self.topic_input_field = TextField(
+            label="Список тем (по одной на строку)",
+            multiline=True,
+            min_lines=4,
+            max_lines=12,
+            width=600,
+            text_size=14,
+            hint_text="Тема 1\nТема 2\nТема 3\n...",
+        )
+        self.hw_input_field = TextField(
+            label="Список ДЗ (по одной на строку)",
+            multiline=True,
+            min_lines=4,
+            max_lines=12,
+            width=600,
+            text_size=14,
+            hint_text="ДЗ для урока 1\nДЗ для урока 2\n...",
+        )
+        self.topic_fill_btn = FilledButton(
+            content=ft.Row([
+                ft.Icon(Icons.EDIT_NOTE, size=18),
+                ft.Text("Заполнить темы", size=14, weight=FontWeight.W_500),
+            ], spacing=6),
+            style=ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+            on_click=lambda _: self._on_fill_topics(),
+        )
+        self.hw_fill_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.HOME_WORK, size=18),
+                ft.Text("Заполнить ДЗ", size=14, weight=FontWeight.W_500),
+            ], spacing=6),
+            style=ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+            on_click=lambda _: self._on_fill_homework(),
+        )
+        self.topic_reload_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.REFRESH, size=18),
+                ft.Text("Обновить темы", size=14),
+            ], spacing=6),
+            style=ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+            on_click=lambda _: self._on_reload_topics(),
+        )
+        self.topics_grid_container = Container(
+            content=Text("Загрузите журнал чтобы увидеть темы", size=14, color=ft.Colors.GREY_500),
+        )
+        self._dates_data = []  # Store dates data for topics
+
         # Placeholder text when no journal loaded
         self.journal_placeholder = Text(
             "Выберите класс, предмет и четверть для просмотра журнала\n\n"
@@ -812,6 +860,42 @@ class EdonishAutoApp:
                         padding=16,
                         expand=True,
                         content=self.journal_grid_container,
+                    ),
+                ),
+                Container(height=12),
+                # ── Topics / Homework section ──
+                Card(
+                    elevation=2,
+                    content=Container(
+                        padding=20,
+                        content=Column([
+                            Row([
+                                Icon(Icons.TOPIC, size=22, color=ft.Colors.PURPLE_600),
+                                Text("Темы уроков и домашние задания", size=18, weight=FontWeight.W_600),
+                                Container(expand=True),
+                                self.journal_student_count,  # reuse for spacing
+                            ], spacing=10),
+                            Container(height=8),
+                            Row([
+                                Text("Список тем (по одной на строку, заполняются по порядку в пустые даты):",
+                                     size=13, color=ft.Colors.GREY_700),
+                            ]),
+                            Row([
+                                self.topic_input_field,
+                                Container(width=12),
+                                self.hw_input_field,
+                            ], alignment=MainAxisAlignment.START, wrap=True),
+                            Container(height=8),
+                            Row([
+                                self.topic_fill_btn,
+                                Container(width=12),
+                                self.hw_fill_btn,
+                                Container(width=12),
+                                self.topic_reload_btn,
+                            ], alignment=MainAxisAlignment.START),
+                            Container(height=8),
+                            self.topics_grid_container,
+                        ]),
                     ),
                 ),
             ],
@@ -1572,6 +1656,12 @@ class EdonishAutoApp:
         self._selected_cell = None
         self._student_quarter_data = {}
 
+        # Store dates data for topics section
+        dates = []
+        if dates_data and dates_data[0].get("days"):
+            dates = dates_data[0]["days"]
+        self._dates_data = dates
+
         if not students:
             self.journal_grid_container.content = Column(
                 [Text("Нет данных", size=16, color=ft.Colors.GREY_600, text_align=TextAlign.CENTER)],
@@ -1582,10 +1672,6 @@ class EdonishAutoApp:
             self.journal_save_btn.disabled = True
             self.page.update()
             return
-
-        dates = []
-        if dates_data and dates_data[0].get("days"):
-            dates = dates_data[0]["days"]
 
         self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
         self.journal_clear_btn.visible = True
@@ -1845,6 +1931,9 @@ class EdonishAutoApp:
         )
 
         self._log_message(f"Журнал загружен: {total_marks} оценок, {empty_cells} пустых")
+
+        # Update topics display
+        self._update_topics_display()
 
         # Update dashboard keyboard handler to include grid navigation
         self.page.on_keyboard_event = self._on_dashboard_keyboard
@@ -2139,6 +2228,167 @@ class EdonishAutoApp:
                 self._log_message(f"Ошибка: {ex}", "error")
 
         threading.Thread(target=do_set, daemon=True).start()
+
+    # ════════════════════════════════════════════════════════════════
+    #  TOPICS / HOMEWORK MANAGEMENT
+    # ════════════════════════════════════════════════════════════════
+
+    def _update_topics_display(self):
+        """Build a table showing dates with their topics and homework."""
+        if not self._dates_data:
+            self.topics_grid_container.content = Text(
+                "Нет данных о датах", size=14, color=ft.Colors.GREY_500
+            )
+            try:
+                self.page.update()
+            except Exception:
+                pass
+            return
+
+        rows = []
+        # Header
+        rows.append(Row([
+            Container(content=Text("Дата", size=12, weight=FontWeight.BOLD), width=90),
+            Container(content=Text("День", size=12, weight=FontWeight.BOLD), width=40),
+            Container(content=Text("Тема", size=12, weight=FontWeight.BOLD), width=350),
+            Container(content=Text("ДЗ", size=12, weight=FontWeight.BOLD), width=250),
+        ], spacing=4))
+
+        empty_topic_count = 0
+        for d in self._dates_data:
+            date_str = d.get("assignmentDate", "")[5:]  # MM-DD
+            weekday = d.get("weekdayShortName", "")
+            topic = d.get("topic", "")
+            hw = d.get("homeWork", "")
+            has_topic = bool(topic and topic.strip())
+            if not has_topic:
+                empty_topic_count += 1
+
+            topic_color = ft.Colors.BLACK87 if has_topic else ft.Colors.RED_400
+            hw_color = ft.Colors.BLACK87 if hw and hw.strip() else ft.Colors.GREY_400
+
+            rows.append(Row([
+                Container(content=Text(date_str, size=12), width=90),
+                Container(content=Text(weekday, size=12, color=ft.Colors.GREY_600), width=40),
+                Container(content=Text(topic or "(пусто)", size=12, color=topic_color, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), width=350),
+                Container(content=Text(hw or "—", size=12, color=hw_color, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS), width=250),
+            ], spacing=4))
+
+        total = len(self._dates_data)
+        stats = f"Всего дат: {total} | Без темы: {empty_topic_count} | С темой: {total - empty_topic_count}"
+
+        self.topics_grid_container.content = Column([
+            Text(stats, size=13, color=ft.Colors.GREY_600, weight=FontWeight.W_500),
+            Container(height=4),
+            Column(rows, scroll=ScrollMode.AUTO, spacing=2),
+        ], scroll=ScrollMode.AUTO)
+
+        try:
+            self.page.update()
+        except Exception:
+            pass
+
+    def _on_fill_topics(self):
+        """Fill empty topics from the list, one per empty date in order."""
+        if not self._journal_loaded or not self._dates_data:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        topics_text = self.topic_input_field.value or ""
+        if not topics_text.strip():
+            self._show_snackbar("Введите список тем!")
+            return
+
+        topics_list = [t.strip() for t in topics_text.strip().split("\n") if t.strip()]
+        if not topics_list:
+            self._show_snackbar("Список тем пуст!")
+            return
+
+        # Find empty dates
+        empty_dates = [d for d in self._dates_data if not d.get("topic", "").strip()]
+        if not empty_dates:
+            self._show_snackbar("Все даты уже имеют темы!")
+            return
+
+        # How many can we fill?
+        to_fill = min(len(topics_list), len(empty_dates))
+
+        self._log_message(f"Заполнение тем: {to_fill} из {len(empty_dates)} пустых дат")
+
+        def do_fill():
+            filled = 0
+            for i in range(to_fill):
+                try:
+                    result = self.api.update_assignment(
+                        schedule_date_id=empty_dates[i]["assignmentDateId"],
+                        topic=topics_list[i],
+                    )
+                    if result:
+                        filled += 1
+                        self._log_message(f"  ✅ Тема {i + 1}: {topics_list[i][:50]}... → {empty_dates[i].get('assignmentDate', '')}")
+                    else:
+                        self._log_message(f"  ❌ Ошибка для даты {empty_dates[i].get('assignmentDate', '')}", "error")
+                    time.sleep(0.3)
+                except Exception as e:
+                    self._log_message(f"  ❌ Ошибка: {e}", "error")
+            self._log_message(f"✅ Темы заполнены: {filled}/{to_fill}")
+            # Reload journal to refresh topics
+            self._reload_journal()
+
+        threading.Thread(target=do_fill, daemon=True).start()
+
+    def _on_fill_homework(self):
+        """Fill empty homework from the list, one per empty date in order."""
+        if not self._journal_loaded or not self._dates_data:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        # Use the same input field for homework (or could use hw_input_field)
+        hw_text = self.hw_input_field.value or ""
+        if not hw_text.strip():
+            self._show_snackbar("Введите список ДЗ!")
+            return
+
+        hw_list = [t.strip() for t in hw_text.strip().split("\n") if t.strip()]
+        if not hw_list:
+            self._show_snackbar("Список ДЗ пуст!")
+            return
+
+        empty_dates = [d for d in self._dates_data if not d.get("homeWork", "").strip()]
+        if not empty_dates:
+            self._show_snackbar("Все даты уже имеют ДЗ!")
+            return
+
+        to_fill = min(len(hw_list), len(empty_dates))
+        self._log_message(f"Заполнение ДЗ: {to_fill} из {len(empty_dates)} пустых дат")
+
+        def do_fill():
+            filled = 0
+            for i in range(to_fill):
+                try:
+                    result = self.api.update_assignment(
+                        schedule_date_id=empty_dates[i]["assignmentDateId"],
+                        home_work=hw_list[i],
+                    )
+                    if result:
+                        filled += 1
+                        self._log_message(f"  ✅ ДЗ {i + 1}: {hw_list[i][:50]}... → {empty_dates[i].get('assignmentDate', '')}")
+                    else:
+                        self._log_message(f"  ❌ Ошибка для даты {empty_dates[i].get('assignmentDate', '')}", "error")
+                    time.sleep(0.3)
+                except Exception as e:
+                    self._log_message(f"  ❌ Ошибка: {e}", "error")
+            self._log_message(f"✅ ДЗ заполнены: {filled}/{to_fill}")
+            self._reload_journal()
+
+        threading.Thread(target=do_fill, daemon=True).start()
+
+    def _on_reload_topics(self):
+        """Reload dates from API to refresh topic display."""
+        if not self._current_journal_params:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+        self._reload_journal()
 
     def _move_to_cell(self, row, col):
         """Move focus to a specific cell in the grid."""

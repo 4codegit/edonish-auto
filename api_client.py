@@ -9,7 +9,8 @@ from config import (
     API_PREFIXES, JOURNAL_OPTIONS, JOURNAL_DATES, JOURNAL_STUDENTS,
     JOURNAL_MARK_CREATE, JOURNAL_MARK_DELETE, JOURNAL_QUARTER_CREATE,
     JOURNAL_SEMESTER_CREATE, JOURNAL_YEAR_CREATE, JOURNAL_DATES_FINAL,
-    JOURNAL_STUDENTS_FINAL, GROUPS_LIST, PERIOD_QUARTERS, TEACHER_SUBJECT,
+    JOURNAL_STUDENTS_FINAL, JOURNAL_ASSIGNMENT_UPDATE, GROUPS_LIST,
+    PERIOD_QUARTERS, TEACHER_SUBJECT,
     SUBGROUPS, LANG_RU, MIN_GRADE, MAX_GRADE
 )
 
@@ -361,6 +362,33 @@ class EdonishAPI:
             "GET",
             self._url(SUBGROUPS, use_role_prefix=False),
             params={"school_id": self.school_id, "group_id": group_id, "lang": lang},
+        )
+
+    def update_assignment(
+        self,
+        schedule_date_id: str,
+        topic: str = "",
+        home_work: str = "",
+    ) -> Optional[Dict]:
+        """Update the topic and/or homework for a lesson date.
+        
+        Args:
+            schedule_date_id: The assignmentDateId from get_journal_dates
+            topic: Lesson topic text
+            home_work: Homework assignment text
+        """
+        body = {
+            "schedule_date_id": schedule_date_id,
+        }
+        if topic:
+            body["topic"] = topic
+        if home_work:
+            body["homeWork"] = home_work
+        return self._request(
+            "POST",
+            self._url(JOURNAL_ASSIGNMENT_UPDATE),
+            params={"school_id": self.school_id},
+            json=body,
         )
 
 
