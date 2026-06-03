@@ -125,10 +125,14 @@ class EdonishAutoApp:
 
         # Page config
         self.page.title = f"{APP_NAME} v{APP_VERSION}"
-        self.page.window.width = 1280
-        self.page.window.height = 820
-        self.page.window.min_width = 960
-        self.page.window.min_height = 640
+        # Desktop-only window settings (not available on mobile)
+        try:
+            self.page.window.width = 1280
+            self.page.window.height = 820
+            self.page.window.min_width = 960
+            self.page.window.min_height = 640
+        except Exception:
+            pass  # Mobile platforms don't support window size
         self.page.theme_mode = ft.ThemeMode.SYSTEM
         self.page.padding = 0
         self.page.spacing = 0

@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.15.0
+  APP_VERSION: 3.16.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -202,10 +202,60 @@ jobs:
           path: dist/dmg/
 
   # ═══════════════════════════════════════════════════════════════
+  # BUILD: Android APK (Flet build apk)
+  # ═══════════════════════════════════════════════════════════════
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flet>=0.85.0 requests certifi
+
+      - name: Build Android APK with flet
+        run: |
+          flet build apk \
+            --project edonish-auto \
+            --bundle-id tj.edonish.auto \
+            --product-name "eDonish Auto" \
+            --product-version "${{ env.APP_VERSION }}"
+
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p dist/android
+          cp build/apk/edonish-auto.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk 2>/dev/null || \
+          cp build/apk/*.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk 2>/dev/null || \
+          find build/ -name "*.apk" -exec cp {} dist/android/edonish-auto-${{ env.APP_VERSION }}.apk \;
+
+      - name: Report APK size
+        run: |
+          SIZE=$(du -h dist/android/edonish-auto-${{ env.APP_VERSION }}.apk | cut -f1)
+          echo "Android APK size: $SIZE"
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: edonish-auto-android
+          path: dist/android/
+
+  # ═══════════════════════════════════════════════════════════════
   # RELEASE: Create GitHub Release with all installers
   # ═══════════════════════════════════════════════════════════════
   release:
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux, build-macos, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -228,42 +278,24 @@ jobs:
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.15.0:
+            ### Что нового в v3.16.0:
+            - 📱 Добавлена Android версия! Скачайте APK и установите на телефон
+            - 🖥️ Код адаптирован для мобильных устройств (защита desktop-only API)
+            - 📦 Новый CI/CD pipeline для автоматической сборки APK
+
+            ### v3.15.0:
             - 📝 Новая секция "Темы уроков и ДЗ" на странице Журнал!
             - 🗓️ Таблица дат с темами и домашними заданиями (пустые темы подсвечены красным)
             - ✏️ Введите список тем (по одной на строку) → кнопка "Заполнить темы" → автоматически заполняет пустые даты
             - 📚 Кнопка "Заполнить ДЗ" — автоматическое заполнение домашних заданий
             - 🔄 Кнопка "Обновить темы" — перезагрузка данных с edonish
 
-            ### v3.14.1:
-            - 🐛 ФИКС: четвертная оценка берёт СВЕЖИЕ данные с API edonish перед расчётом ceil(средний балл)
-
-            ### v3.14.0:
-            - 📊 Четвертные оценки = ceil(средний балл) вместо рандома
-            - 🖱️ Клик на Чтв в Журнале = ceil(средний балл)
-            - 🎲 Кнопка 🎲 (рандом) для каждого ученика
-
-            ### v3.13.0:
-            - 🎲 Новая кнопка 🎲 (рандом) для каждого ученика в Журнале! Одним кликом ставит рандомную оценку (3-10) в первую пустую дату
-            - 🐛 КРИТИЧЕСКИЙ ФИКС: `mark_type_id` больше НЕ хардкодится как 8! Теперь `mark_type_id` = фактической оценке (3-10)
-            - 🔄 Страница Журнал теперь АВТОМАТИЧЕСКИ обновляется после операций
-            - 🔧 Фикс: Ctrl+S теперь корректно сравнивает с original_value (с сервера)
-
-            ### v3.12.0:
-            - 🐛 КРИТИЧЕСКИЙ ФИКС: `mark_type_id` больше НЕ хардкодится как 8! Теперь `mark_type_id` = фактической оценке (3-10), как у четвертных оценок. Раньше ВСЕ обычные оценки сохранялись как 8!
-            - 🔄 Страница Журнал теперь АВТОМАТИЧЕСКИ обновляется после операций на странице Авто-оценки (удаление, заполнение)
-            - 🔧 Фикс: Ctrl+S теперь корректно сравнивает с original_value (с сервера), а не с current_value — больше нет ложных «Нет изменений для сохранения»
-            - 🐛 Критический фикс: mark ID теперь использует `assignmentMarkId` (удаление оценок работает!)
-            - 🐛 Критический фикс: четвертные оценки — добавлены `mark_id`, `subject_id`, `curriculum_property_id` (422 ошибка исправлена!)
-            - 🐛 Критический фикс: quarter IDs теперь group-specific из journal_options (2 четверть теперь показывает даты!)
-            - 🔧 Фикс: subjects теперь содержат `curriculumPropertyId` из journal_options
-            - 🔧 Фикс: groups обогащаются вложенными quarters и subjects для корректных API вызовов
-
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
             - **Linux (Ubuntu/Debian)**: `sudo dpkg -i edonish-auto_*.deb`
             - **Linux (Fedora/RHEL)**: `sudo dnf install ./edonish-auto-*.rpm`
             - **macOS**: Распакуйте `edonish-auto-*-macos.zip`, перетащите .app в Applications
+            - **Android**: Скачайте `edonish-auto-*.apk`, включите установку из неизвестных источников, установите
 
             ### Важно для Windows:
             Если .exe не запускается из-за ошибки DLL, установите:
@@ -274,5 +306,6 @@ jobs:
             release-artifacts/**/*.rpm
             release-artifacts/**/*.deb
             release-artifacts/**/*.zip
+            release-artifacts/**/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

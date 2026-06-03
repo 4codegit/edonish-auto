@@ -191,8 +191,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'eDonish Auto',
             'CFBundleDisplayName': 'eDonish Auto',
-            'CFBundleVersion': '3.13.0',
-            'CFBundleShortVersionString': '3.13.0',
+            'CFBundleVersion': '3.16.0',
+            'CFBundleShortVersionString': '3.16.0',
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.13',
         },
