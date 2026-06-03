@@ -994,7 +994,62 @@ class EdonishAutoApp:
                 self.teacher_subjects = [
                     {"subjectId": sid, "subjectName": sname} for sid, sname in subjects_set
                 ]
-                self.quarters_data = self.api.get_quarters() or []
+
+                # Build quarters from journal_options (group-specific, not school-level)
+                # school-level get_quarters() returns wrong qpropId for specific groups
+                quarters_by_name = {}
+                for g in self.journal_options.get("groups", []):
+                    for q in g.get("quarters", []):
+                        qname = q.get("name", "")
+                        if qname and qname not in quarters_by_name:
+                            quarters_by_name[qname] = {
+                                "qpropId": q["id"],
+                                "name": qname,
+                                "startDate": q.get("startDate", ""),
+                                "endDate": q.get("endDate", ""),
+                                "currentQuarter": q.get("currentQuarter", False),
+                            }
+                self.quarters_data = list(quarters_by_name.values())
+
+                # Build subjects with curriculumPropertyId from journal_options
+                subjects_with_curriculum = {}
+                for g in self.journal_options.get("groups", []):
+                    for s in g.get("subjects", []):
+                        sid = s["subjectId"]
+                        if sid not in subjects_with_curriculum:
+                            subjects_with_curriculum[sid] = {
+                                "subjectId": sid,
+                                "subjectName": s["subjectName"],
+                                "curriculumPropertyId": s.get("curriculumPropertyId", 0),
+                            }
+                self.teacher_subjects = list(subjects_with_curriculum.values())
+
+                # Enrich groups_data with group-specific quarters and subjects
+                # (each group has its own quarter IDs and subject list)
+                for gd in self.groups_data:
+                    for g in self.journal_options.get("groups", []):
+                        gname = f"{g.get('number', '')}{g.get('name', '')}"
+                        if gname == gd["name"]:
+                            gd["quarters"] = [
+                                {
+                                    "qpropId": q["id"],
+                                    "name": q.get("name", ""),
+                                    "startDate": q.get("startDate", ""),
+                                    "endDate": q.get("endDate", ""),
+                                    "currentQuarter": q.get("currentQuarter", False),
+                                }
+                                for q in g.get("quarters", [])
+                            ]
+                            gd["subjects"] = [
+                                {
+                                    "subjectId": s["subjectId"],
+                                    "subjectName": s["subjectName"],
+                                    "curriculumPropertyId": s.get("curriculumPropertyId", 0),
+                                }
+                                for s in g.get("subjects", [])
+                            ]
+                            break
+
                 self._update_dropdowns()
 
             except Exception as e:
@@ -1416,10 +1471,23 @@ class EdonishAutoApp:
                 subject_id = s["subjectId"]
                 break
 
-        for q in self.quarters_data:
-            if q.get("name") == quarter_name:
-                qprop_id = q["qpropId"]
+        # Look up quarter ID from journal_options for this specific group
+        # (different groups may have different quarter IDs)
+        for g in (self.journal_options or {}).get("groups", []):
+            gname = f"{g.get('number', '')}{g.get('name', '')}"
+            if gname == class_name:
+                for q in g.get("quarters", []):
+                    if q.get("name") == quarter_name:
+                        qprop_id = q["id"]
+                        break
                 break
+
+        # Fallback to quarters_data if not found in journal_options
+        if not qprop_id:
+            for q in self.quarters_data:
+                if q.get("name") == quarter_name:
+                    qprop_id = q["qpropId"]
+                    break
 
         if not all([group_id, subject_id, qprop_id]):
             self._show_snackbar("Выберите класс, предмет и четверть!")
@@ -1579,7 +1647,7 @@ class EdonishAutoApp:
                 date_id = d["assignmentDateId"]
                 mark_info = marks_by_date.get(date_id)
                 mark_value = mark_info.get("shortName", "") if mark_info else ""
-                mark_id = mark_info.get("id", "") if mark_info else ""
+                mark_id = mark_info.get("assignmentMarkId", "") if mark_info else ""
                 qprop_id = d.get("quarterPropertyId", self._current_journal_params.get("qprop_id", 0))
 
                 if mark_value:
@@ -1782,7 +1850,7 @@ class EdonishAutoApp:
                 )
                 if result and not (isinstance(result, dict) and result.get("error")):
                     data["current_value"] = str(grade)
-                    data["mark_id"] = result.get("id", "") if isinstance(result, dict) else ""
+                    data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
                     cell.value = str(grade)
                     cell.bgcolor = ft.Colors.GREEN_50
                     cell.border_color = ft.Colors.TRANSPARENT

@@ -268,13 +268,19 @@ class EdonishAPI:
         )
 
     def create_quarter_mark(
-        self, student_id: int, quarter_property_id: int, mark: int
+        self, student_id: int, quarter_property_id: int, mark: int,
+        subject_id: int = 0, curriculum_property_id: int = 0,
     ) -> Optional[Dict]:
         """Create a quarter (четвертная) mark."""
+        # mark_id is the ID from marks_ten_point matching the mark value
+        mark_id = mark  # For 10-point system, mark_id equals the mark value
         body = {
             "group_subgroup_student_id": student_id,
             "quarter_property_id": quarter_property_id,
             "mark": mark,
+            "mark_id": mark_id,
+            "subject_id": subject_id,
+            "curriculum_property_id": curriculum_property_id,
         }
         return self._request(
             "POST",

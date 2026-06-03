@@ -54,6 +54,8 @@ class GradeTask:
     error: str = ""
     result: Any = None
     existing_mark_id: str = ""  # ID of existing mark to delete before creating new one
+    subject_id: int = 0  # subject_id for quarter mark creation
+    curriculum_property_id: int = 0  # curriculumPropertyId for quarter mark creation
 
 
 @dataclass
@@ -131,11 +133,30 @@ class GradeEngine:
             group_id = group["id"]
             group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
 
-            for subject in subjects:
+            # Use group-specific quarters if available, otherwise use global quarters
+            group_quarters = group.get("quarters", quarters)
+            # Use group-specific subjects if available, otherwise use global subjects
+            group_subjects = group.get("subjects", subjects)
+
+            # Filter subjects to match the selected ones
+            if group_subjects is not subjects:  # group has its own subjects
+                selected_subject_ids = {s.get("subjectId") for s in subjects}
+                effective_subjects = [s for s in group_subjects if s.get("subjectId") in selected_subject_ids] if selected_subject_ids else group_subjects
+            else:
+                effective_subjects = subjects
+
+            # Filter quarters to match the selected ones
+            if group_quarters is not quarters:  # group has its own quarters
+                selected_quarter_names = {q.get("name") for q in quarters}
+                effective_quarters = [q for q in group_quarters if q.get("name") in selected_quarter_names] if selected_quarter_names else group_quarters
+            else:
+                effective_quarters = quarters
+
+            for subject in effective_subjects:
                 subject_id = subject.get("subjectId", subject.get("id"))
                 subject_name = subject.get("subjectName", subject.get("name", ""))
 
-                for quarter in quarters:
+                for quarter in effective_quarters:
                     qprop_id = quarter["qpropId"]
                     quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
 
@@ -213,7 +234,7 @@ class GradeEngine:
                             # If not fill_empty_only and there's an existing mark, store its ID for deletion
                             existing_mark_id = ""
                             if not fill_empty_only and date_id in existing_marks:
-                                existing_mark_id = existing_marks[date_id].get("id", "")
+                                existing_mark_id = existing_marks[date_id].get("assignmentMarkId", "")
 
                             # Generate weighted random grade
                             grade = weighted_random_grade(min_grade, max_grade)
@@ -255,11 +276,25 @@ class GradeEngine:
             group_id = group["id"]
             group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
 
-            for subject in subjects:
+            # Use group-specific quarters/subjects if available
+            group_quarters = group.get("quarters", quarters)
+            group_subjects = group.get("subjects", subjects)
+            if group_quarters is not quarters:
+                selected_quarter_names = {q.get("name") for q in quarters}
+                effective_quarters = [q for q in group_quarters if q.get("name") in selected_quarter_names] if selected_quarter_names else group_quarters
+            else:
+                effective_quarters = quarters
+            if group_subjects is not subjects:
+                selected_subject_ids = {s.get("subjectId") for s in subjects}
+                effective_subjects = [s for s in group_subjects if s.get("subjectId") in selected_subject_ids] if selected_subject_ids else group_subjects
+            else:
+                effective_subjects = subjects
+
+            for subject in effective_subjects:
                 subject_id = subject.get("subjectId", subject.get("id"))
                 subject_name = subject.get("subjectName", subject.get("name", ""))
 
-                for quarter in quarters:
+                for quarter in effective_quarters:
                     qprop_id = quarter["qpropId"]
                     quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
 
@@ -286,6 +321,7 @@ class GradeEngine:
                             continue
 
                         grade = weighted_random_grade(min_grade, max_grade)
+                        curriculum_property_id = subject.get("curriculumPropertyId", 0)
                         task = GradeTask(
                             student_id=student_id,
                             student_name=student_name,
@@ -295,6 +331,8 @@ class GradeEngine:
                             mark=grade,
                             subject_name=subject_name,
                             group_name=group_name,
+                            subject_id=subject_id,
+                            curriculum_property_id=curriculum_property_id,
                         )
                         plan.add_task(task)
 
@@ -442,6 +480,8 @@ class GradeEngine:
                     student_id=task.student_id,
                     quarter_property_id=task.quarter_property_id,
                     mark=task.mark,
+                    subject_id=task.subject_id,
+                    curriculum_property_id=task.curriculum_property_id,
                 )
                 if result:
                     task.status = "success"
@@ -485,11 +525,25 @@ class GradeEngine:
             group_id = group["id"]
             group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
 
-            for subject in subjects:
+            # Use group-specific quarters/subjects if available
+            group_quarters = group.get("quarters", quarters)
+            group_subjects = group.get("subjects", subjects)
+            if group_quarters is not quarters:
+                selected_quarter_names = {q.get("name") for q in quarters}
+                effective_quarters = [q for q in group_quarters if q.get("name") in selected_quarter_names] if selected_quarter_names else group_quarters
+            else:
+                effective_quarters = quarters
+            if group_subjects is not subjects:
+                selected_subject_ids = {s.get("subjectId") for s in subjects}
+                effective_subjects = [s for s in group_subjects if s.get("subjectId") in selected_subject_ids] if selected_subject_ids else group_subjects
+            else:
+                effective_subjects = subjects
+
+            for subject in effective_subjects:
                 subject_id = subject.get("subjectId", subject.get("id"))
                 subject_name = subject.get("subjectName", subject.get("name", ""))
 
-                for quarter in quarters:
+                for quarter in effective_quarters:
                     qprop_id = quarter["qpropId"]
                     quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
 
@@ -615,11 +669,25 @@ class GradeEngine:
             group_id = group["id"]
             group_name = f"{group.get('number', group.get('class', ''))}{group.get('group', group.get('name', ''))}"
 
-            for subject in subjects:
+            # Use group-specific quarters/subjects if available
+            group_quarters = group.get("quarters", quarters)
+            group_subjects = group.get("subjects", subjects)
+            if group_quarters is not quarters:
+                selected_quarter_names = {q.get("name") for q in quarters}
+                effective_quarters = [q for q in group_quarters if q.get("name") in selected_quarter_names] if selected_quarter_names else group_quarters
+            else:
+                effective_quarters = quarters
+            if group_subjects is not subjects:
+                selected_subject_ids = {s.get("subjectId") for s in subjects}
+                effective_subjects = [s for s in group_subjects if s.get("subjectId") in selected_subject_ids] if selected_subject_ids else group_subjects
+            else:
+                effective_subjects = subjects
+
+            for subject in effective_subjects:
                 subject_id = subject.get("subjectId", subject.get("id"))
                 subject_name = subject.get("subjectName", subject.get("name", ""))
 
-                for quarter in quarters:
+                for quarter in effective_quarters:
                     qprop_id = quarter["qpropId"]
                     quarter_name = quarter.get("name", f"Чоряки {qprop_id}")
 
@@ -652,7 +720,7 @@ class GradeEngine:
                             marks = student.get("marks") or student.get("subject_marks") or []
                         
                         for mark in marks:
-                            mark_id = mark.get("id")
+                            mark_id = mark.get("assignmentMarkId") or mark.get("id")
                             if mark_id:
                                 task = GradeTask(
                                     student_id=student_id,
@@ -670,7 +738,7 @@ class GradeEngine:
 
                         # Also collect quarter marks
                         for qm in (student.get("quarterMark") or []):
-                            qm_id = qm.get("id")
+                            qm_id = qm.get("quarterMarkId") or qm.get("assignmentMarkId") or qm.get("id")
                             if qm_id and qm.get("shortName"):
                                 task = GradeTask(
                                     student_id=student_id,
