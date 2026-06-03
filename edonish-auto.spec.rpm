@@ -59,7 +59,15 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
-* Tue Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.8.0-1
+* Wed Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.9.0-1
+- Fixed dropdown on_select handlers for auto-grade page
+- Fixed class selection filtering subjects
+- Fixed Ctrl+S as global keyboard shortcut
+- Fixed RuntimeWarning focus() properly suppressed
+- Fixed teacher_subjects consistent subjectId/subjectName format
+- Added debug logging for mark detection
+
+* Wed Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.8.0-1
 - Fixed grade insertion with delete+create overwrite mode
 - Fixed progress bar showing fill percentage and warnings
 - Fixed journal grade changes not being saved to server
