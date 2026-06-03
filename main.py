@@ -1391,7 +1391,10 @@ class EdonishAutoApp:
                     num_workers=num_workers,
                 )
                 if self.quarter_marks_check.value:
-                    self._log_message("Заполнение четвертных оценок...")
+                    # Wait for edonish API to sync newly inserted grades
+                    self._log_message("Ожидание синхронизации edonish (3 сек)...")
+                    time.sleep(3)
+                    self._log_message("Заполнение четвертных оценок (ceil от среднего балла)...")
                     qplan = self.engine.build_grade_plan_for_quarter_marks(
                         groups=self._get_selected_groups(),
                         subjects=self._get_selected_subjects(),
@@ -1770,7 +1773,7 @@ class EdonishAutoApp:
             if grade_values:
                 avg = sum(grade_values) / len(grade_values)
                 ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
-                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (нажмите чтобы поставить)"
+                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: запрос с edonish + ceil)"
             else:
                 ceil_grade = None
                 quarter_tooltip = "Нет оценок для расчёта"
@@ -2060,7 +2063,10 @@ class EdonishAutoApp:
         self._set_cell_grade(row, empty_col, grade)
 
     def _on_set_quarter_mark(self, row: int):
-        """Set quarter mark for a student as ceil(average of their subject marks)."""
+        """Set quarter mark for a student as ceil(average of their subject marks).
+        
+        Fetches fresh data from edonish API first, then calculates ceil(average).
+        """
         if not self._journal_loaded:
             return
 
@@ -2069,36 +2075,62 @@ class EdonishAutoApp:
             self._show_snackbar("Нет данных ученика")
             return
 
-        # Calculate ceil(average) from current subject marks in the grid
-        grade_values = []
-        for col in range(self._grid_cols):
-            data = self._grade_data.get((row, col))
-            if data:
-                val = data.get("current_value", "")
-                if val and str(val).strip().isdigit():
-                    v = int(str(val).strip())
-                    if MIN_GRADE <= v <= MAX_GRADE:
-                        grade_values.append(v)
+        params = self._current_journal_params
+        student_id = qdata["student_id"]
 
-        if not grade_values:
-            self._show_snackbar("У ученика нет оценок для расчёта четвертной")
-            return
-
-        avg = sum(grade_values) / len(grade_values)
-        grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
-        self._log_message(f"Четвертная для строки {row + 1}: ср.={avg:.2f}, ceil={grade} (из {len(grade_values)} оценок)")
+        self._log_message(f"Запрос данных с edonish для расчёта четвертной (строка {row + 1})...")
 
         def do_set():
             try:
+                # Step 1: Fetch FRESH student data from edonish API
+                students = self.api.get_journal_students(
+                    group_id=params["group_id"],
+                    subject_id=params["subject_id"],
+                    quarter_property_id=params["qprop_id"],
+                )
+
+                # Step 2: Find our student in the fresh data
+                student = None
+                for s in (students or []):
+                    if s.get("studentId") == student_id:
+                        student = s
+                        break
+
+                if not student:
+                    self._log_message(f"Ученик не найден в ответе API (строка {row + 1})", "error")
+                    return
+
+                # Step 3: Extract grades from fresh API response
+                grade_values = []
+                for m in (student.get("subjectMarks") or []):
+                    sn = m.get("shortName", "")
+                    if sn and sn.isdigit():
+                        v = int(sn)
+                        if MIN_GRADE <= v <= MAX_GRADE:
+                            grade_values.append(v)
+
+                if not grade_values:
+                    self._log_message(f"У ученика нет оценок для расчёта четвертной (строка {row + 1})", "error")
+                    return
+
+                # Step 4: Calculate ceil(average)
+                avg = sum(grade_values) / len(grade_values)
+                grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                self._log_message(
+                    f"Четвертная (строка {row + 1}): оценки={grade_values}, "
+                    f"ср.={avg:.2f}, ceil={grade}"
+                )
+
+                # Step 5: Save quarter mark to edonish
                 result = self.api.create_quarter_mark(
-                    student_id=qdata["student_id"],
+                    student_id=student_id,
                     quarter_property_id=qdata["qprop_id"],
                     mark=grade,
                     subject_id=qdata["subject_id"],
                     curriculum_property_id=qdata["curriculum_property_id"],
                 )
                 if result and not (isinstance(result, dict) and result.get("error")):
-                    self._log_message(f"Четвертная оценка {grade} поставлена (строка {row + 1})")
+                    self._log_message(f"✅ Четвертная оценка {grade} поставлена (строка {row + 1})")
                     # Reload journal to show the updated quarter mark
                     self._reload_journal()
                 else:
