@@ -7,10 +7,10 @@ from typing import Optional, List, Dict, Any, Tuple
 from config import (
     API_BASE, API_LOGIN, API_REFRESH, API_HEADER_INFO,
     API_PREFIXES, JOURNAL_OPTIONS, JOURNAL_DATES, JOURNAL_STUDENTS,
-    JOURNAL_MARK_CREATE, JOURNAL_MARK_DELETE, JOURNAL_QUARTER_CREATE,
-    JOURNAL_SEMESTER_CREATE, JOURNAL_YEAR_CREATE, JOURNAL_DATES_FINAL,
-    JOURNAL_STUDENTS_FINAL, GROUPS_LIST, PERIOD_QUARTERS, TEACHER_SUBJECT,
-    SUBGROUPS, LANG_RU, MIN_GRADE, MAX_GRADE
+    JOURNAL_MARK_CREATE, JOURNAL_MARK_DELETE, JOURNAL_QUARTER_DELETE,
+    JOURNAL_QUARTER_CREATE, JOURNAL_SEMESTER_CREATE, JOURNAL_YEAR_CREATE,
+    JOURNAL_DATES_FINAL, JOURNAL_STUDENTS_FINAL, GROUPS_LIST, PERIOD_QUARTERS,
+    TEACHER_SUBJECT, SUBGROUPS, LANG_RU, MIN_GRADE, MAX_GRADE
 )
 
 logger = logging.getLogger("edonish_auto")
@@ -276,6 +276,73 @@ class EdonishAPI:
                 self._url(JOURNAL_MARK_DELETE),
                 params={"mark_id": mark_id, "school_id": self.school_id},
             )
+
+    def delete_quarter_mark(self, quarter_mark_id) -> Optional[Dict]:
+        """Delete a quarter (четвертная) mark by its ID.
+
+        Tries the dedicated quarter-mark endpoint first, then falls back
+        to the generic mark-delete endpoint with quarter_mark_id.
+        """
+        # Ensure string type
+        qmid = str(quarter_mark_id) if quarter_mark_id else ""
+
+        # Attempt 1: dedicated quarter-mark delete endpoint with JSON body
+        try:
+            result = self._request(
+                "POST",
+                self._url(JOURNAL_QUARTER_DELETE),
+                params={"school_id": self.school_id},
+                json={"quarter_mark_id": qmid},
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
+        # Attempt 2: dedicated endpoint with different body key
+        try:
+            result = self._request(
+                "POST",
+                self._url(JOURNAL_QUARTER_DELETE),
+                params={"school_id": self.school_id},
+                json={"mark_id": qmid},
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
+        # Attempt 3: dedicated endpoint via query params
+        try:
+            result = self._request(
+                "POST",
+                self._url(JOURNAL_QUARTER_DELETE),
+                params={"quarter_mark_id": qmid, "school_id": self.school_id},
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
+        # Attempt 4: fallback to generic mark delete endpoint
+        try:
+            result = self._request(
+                "POST",
+                self._url(JOURNAL_MARK_DELETE),
+                params={"school_id": self.school_id},
+                json={"mark_id": qmid},
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
+        # Attempt 5: generic endpoint via query params
+        return self._request(
+            "POST",
+            self._url(JOURNAL_MARK_DELETE),
+            params={"mark_id": qmid, "school_id": self.school_id},
+        )
 
     def create_quarter_mark(
         self, student_id: int, quarter_property_id: int, mark: int,

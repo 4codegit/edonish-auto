@@ -28,6 +28,7 @@ JOURNAL_STUDENTS_FINAL = "/journal/students/final"
 JOURNAL_DATES_FINAL = "/journal/dates/final"
 JOURNAL_MARK_CREATE = "/journal/10_point_mark/create"
 JOURNAL_MARK_DELETE = "/journal/mark/delete"
+JOURNAL_QUARTER_DELETE = "/journal/10_point_quarter_mark/delete"
 JOURNAL_QUARTER_CREATE = "/journal/10_point_quarter_mark/create"
 JOURNAL_SEMESTER_CREATE = "/journal/10_point_semester/create"
 JOURNAL_YEAR_CREATE = "/journal/10_point_year/create"
@@ -57,7 +58,7 @@ DEFAULT_BATCH_SIZE = 4
 
 # App settings
 APP_NAME = "eDonish Auto"
-APP_VERSION = "3.20.0"
+APP_VERSION = "3.21.0"
 APP_AUTHOR = "Edonish Auto Team"
 
 # Session file

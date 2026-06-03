@@ -58,7 +58,7 @@ import flet as ft
 from flet import (
     AppBar, Icon, Icons, IconButton, NavigationRail, NavigationRailDestination,
     NavigationRailLabelType, Page, Text, TextField,
-    OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
+    ElevatedButton, OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
     ProgressRing, ProgressBar, Container, Card, Column, Row,
     Tabs, Tab, ListView, Divider, SnackBar, AlertDialog, FontWeight,
     MainAxisAlignment, CrossAxisAlignment, TextAlign,
@@ -1578,7 +1578,7 @@ class EdonishAutoApp:
 
         def do_delete():
             try:
-                result = self.api.delete_mark(mark_id=quarter_mark_id)
+                result = self.api.delete_quarter_mark(quarter_mark_id=quarter_mark_id)
                 self._log_message(f"✅ Четвертная оценка удалена (строка {row + 1})")
                 self._reload_journal()
             except Exception as ex:
@@ -2648,22 +2648,29 @@ class EdonishAutoApp:
 
                 deleted = 0
                 failed = 0
+                found = 0
 
                 for s in students:
                     student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
-                    for qm in (s.get("quarterMark") or []):
+                    quarter_marks = s.get("quarterMark") or []
+                    for qm in quarter_marks:
                         qm_id = qm.get("quarterMarkId") or qm.get("assignmentMarkId") or qm.get("id")
-                        if qm_id and qm.get("shortName"):
+                        qm_val = qm.get("shortName", "")
+                        if qm_id:
+                            found += 1
                             try:
-                                self.api.delete_mark(mark_id=qm_id)
+                                self.api.delete_quarter_mark(quarter_mark_id=qm_id)
                                 deleted += 1
-                                self._log_message(f"  🗑️ {student_name}: четвертная {qm.get('shortName')} удалена")
+                                self._log_message(f"  🗑️ {student_name}: четвертная {qm_val or '?'} удалена (id={qm_id})")
                             except Exception as e:
                                 failed += 1
                                 self._log_message(f"  ❌ {student_name}: {e}", "error")
-                            time.sleep(0.1)
+                            time.sleep(0.15)
 
-                self._log_message(f"Удаление четвертных: ✅ {deleted} удалено, ❌ {failed} ошибок")
+                if found == 0:
+                    self._log_message("Четвертные оценки не найдены")
+                else:
+                    self._log_message(f"Удаление четвертных: ✅ {deleted} удалено, ❌ {failed} ошибок (найдено: {found})")
             except Exception as e:
                 self._log_message(f"Ошибка удаления четвертных: {e}", "error")
             finally:

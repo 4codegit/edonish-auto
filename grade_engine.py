@@ -790,7 +790,11 @@ class GradeEngine:
 
             task.status = "running"
             try:
-                result = self.api.delete_mark(mark_id=task.result)
+                # Use dedicated quarter-mark deletion for quarter marks
+                if not task.assignment_date_id:
+                    result = self.api.delete_quarter_mark(quarter_mark_id=task.result)
+                else:
+                    result = self.api.delete_mark(mark_id=task.result)
                 if result:
                     task.status = "success"
                     completed += 1
@@ -908,7 +912,7 @@ class GradeEngine:
 
             task.status = "running"
             try:
-                result = self.api.delete_mark(mark_id=task.result)
+                result = self.api.delete_quarter_mark(quarter_mark_id=task.result)
                 if result:
                     task.status = "success"
                     completed += 1
