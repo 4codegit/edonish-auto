@@ -241,12 +241,17 @@ class EdonishAPI:
         student_id: int,
         assignment_date_id: str,
         mark: int,
-        mark_type_id: int = 8,
+        mark_type_id: int = None,
         quarter_property_id: int = None,
     ) -> Optional[Dict]:
-        """Create a mark for a student on a specific date."""
+        """Create a mark for a student on a specific date.
+
+        In the 10-point system, mark_type_id must equal the actual grade value
+        (e.g. mark=7 → mark_type_id=7), similar to how quarter marks use mark_id=mark.
+        """
+        effective_mark_type_id = mark_type_id if mark_type_id is not None else mark
         body = {
-            "mark_type_id": mark_type_id,
+            "mark_type_id": effective_mark_type_id,
             "group_subgroup_student_id": student_id,
             "schedule_date_id": assignment_date_id,
             "quarter_property_id": quarter_property_id or 0,

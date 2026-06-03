@@ -1437,6 +1437,10 @@ class EdonishAutoApp:
             self.progress_pct.value = f"{pct * 100:.0f}%"
             self.progress_bar.value = pct
             self.stats_label.value = f"Успешно: {plan.completed}  |  Ошибки: {plan.failed}  |  Пропущено: {plan.skipped}"
+        # Reload journal page if it was previously loaded, so changes are visible
+        if self._journal_loaded and self._current_journal_params:
+            self._log_message("Обновление журнала после заполнения...")
+            self._reload_journal()
         self.page.run_thread(self._safe_update)
 
     # ════════════════════════════════════════════════════════════════
@@ -1517,6 +1521,33 @@ class EdonishAutoApp:
                 self._display_journal_grid(students, dates_data)
             except Exception as e:
                 self._log_message(f"Ошибка загрузки журнала: {e}", "error")
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _reload_journal(self):
+        """Reload the journal using the stored params (after grade operations)."""
+        params = self._current_journal_params
+        if not params:
+            return
+        group_id = params["group_id"]
+        subject_id = params["subject_id"]
+        qprop_id = params["qprop_id"]
+
+        def load():
+            try:
+                students = self.api.get_journal_students(
+                    group_id=group_id,
+                    subject_id=subject_id,
+                    quarter_property_id=qprop_id,
+                )
+                dates_data = self.api.get_journal_dates(
+                    group_id=group_id,
+                    subject_id=subject_id,
+                    quarter_property_id=qprop_id,
+                )
+                self._display_journal_grid(students, dates_data)
+            except Exception as e:
+                self._log_message(f"Ошибка обновления журнала: {e}", "error")
 
         threading.Thread(target=load, daemon=True).start()
 
@@ -1850,6 +1881,7 @@ class EdonishAutoApp:
                 )
                 if result and not (isinstance(result, dict) and result.get("error")):
                     data["current_value"] = str(grade)
+                    data["original_value"] = str(grade)
                     data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
                     cell.value = str(grade)
                     cell.bgcolor = ft.Colors.GREEN_50
@@ -1896,6 +1928,7 @@ class EdonishAutoApp:
                 cell.bgcolor = ft.Colors.GREY_50 if row % 2 == 0 else ft.Colors.SURFACE
                 cell.border_color = ft.Colors.TRANSPARENT
                 data["current_value"] = ""
+                data["original_value"] = ""
                 data["mark_id"] = ""
                 self._log_message(f"Оценка удалена (строка {row + 1}, столбец {col + 1})")
             except Exception as ex:
@@ -2119,6 +2152,10 @@ class EdonishAutoApp:
         self.signature_btn.disabled = False
         self.progress_pct.color = ft.Colors.BLUE_600
         self.progress_label.value = "Удаление завершено"
+        # Reload journal page if it was previously loaded, so deletions are visible
+        if self._journal_loaded and self._current_journal_params:
+            self._log_message("Обновление журнала после удаления...")
+            self._reload_journal()
         self.page.run_thread(self._safe_update)
 
     def _log_message(self, message: str, level: str = "info"):
@@ -2157,18 +2194,22 @@ class EdonishAutoApp:
             return
 
         # Find all cells that have been modified but not yet saved
+        # Compare cell display value against original_value (what was loaded from server)
         modified_cells = []
         for (row, col), data in self._grade_data.items():
             cell = self._grade_cells.get((row, col))
             if not cell:
                 continue
-            cell_value = cell.value or ""
-            current_saved = data.get("current_value", "")
-            # Check if the cell value differs from the saved value
-            if cell_value.strip() and cell_value.strip().isdigit():
-                grade = int(cell_value.strip())
-                if MIN_GRADE <= grade <= MAX_GRADE and str(grade) != current_saved:
+            cell_value = (cell.value or "").strip()
+            original_value = data.get("original_value", "")
+            # Check if the cell value differs from the originally loaded value
+            if cell_value and cell_value.isdigit():
+                grade = int(cell_value)
+                if MIN_GRADE <= grade <= MAX_GRADE and cell_value != original_value:
                     modified_cells.append((row, col, grade))
+            elif not cell_value and original_value:
+                # Cell was cleared — delete the grade
+                modified_cells.append((row, col, None))
 
         if not modified_cells:
             # Also try the currently selected cell
@@ -2187,10 +2228,25 @@ class EdonishAutoApp:
             return
 
         # Save all modified cells
-        self._show_snackbar(f"Сохранение {len(modified_cells)} оценок...")
+        save_count = 0
+        delete_count = 0
         for row, col, grade in modified_cells:
-            self._set_cell_grade(row, col, grade)
+            if grade is None:
+                # Delete the grade
+                self._delete_cell_grade(row, col)
+                delete_count += 1
+            else:
+                self._set_cell_grade(row, col, grade)
+                save_count += 1
             time.sleep(0.15)  # Small delay between saves to avoid API rate limiting
+
+        parts = []
+        if save_count:
+            parts.append(f"{save_count} сохранено")
+        if delete_count:
+            parts.append(f"{delete_count} удалено")
+        if parts:
+            self._show_snackbar(", ".join(parts))
 
     def _show_snackbar(self, message: str):
         try:
