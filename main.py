@@ -2086,9 +2086,9 @@ class EdonishAutoApp:
             if grade_values:
                 avg = sum(grade_values) / len(grade_values)
                 ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
-                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить)"
+                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить/пересчитать)"
                 if quarter_mark_val:
-                    quarter_tooltip += " | двойной клик: удалить"
+                    quarter_tooltip += " | ПКМ: удалить"
             else:
                 ceil_grade = None
                 quarter_tooltip = "Нет оценок для расчёта четвертной"
@@ -2110,7 +2110,7 @@ class EdonishAutoApp:
                 ),
                 tooltip=quarter_tooltip,
                 on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
-                on_double_click=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
+                on_secondary_click=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
             )
             row_cells.append(quarter_cell)
 
@@ -2152,7 +2152,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | Двойной клик на Чтв: удалить",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | ПКМ на Чтв: удалить",
             size=11, color=ft.Colors.GREY_400,
         ))
 
