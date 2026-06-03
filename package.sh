@@ -4,7 +4,7 @@
 # ════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-VERSION="3.19.0"
+VERSION="3.20.0"
 APP_NAME="edonish-auto"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

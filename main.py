@@ -517,7 +517,7 @@ class EdonishAutoApp:
         )
 
         # ── Action buttons ──────────────────────────────────────────
-        self.analyze_btn = ft.Button(
+        self.analyze_btn = ElevatedButton(
             content=ft.Row([
                 ft.Icon(Icons.SEARCH, size=18),
                 ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
@@ -554,7 +554,7 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_stop(),
             disabled=True,
         )
-        self.signature_btn = ft.Button(
+        self.signature_btn = ElevatedButton(
             content=ft.Row([
                 ft.Icon(Icons.DRAW, size=18),
                 ft.Text("Подпись", size=15, weight=FontWeight.W_600),
@@ -746,7 +746,7 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_load_journal(),
         )
 
-        self.journal_save_btn = ft.Button(
+        self.journal_save_btn = ElevatedButton(
             content=ft.Row([
                 ft.Icon(Icons.SAVE, size=18),
                 ft.Text("Сохранить", size=15, weight=FontWeight.W_600),
@@ -2088,7 +2088,7 @@ class EdonishAutoApp:
                 ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
                 quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить/пересчитать)"
                 if quarter_mark_val:
-                    quarter_tooltip += " | ПКМ: удалить"
+                    quarter_tooltip += " | долгое нажатие: удалить"
             else:
                 ceil_grade = None
                 quarter_tooltip = "Нет оценок для расчёта четвертной"
@@ -2110,7 +2110,7 @@ class EdonishAutoApp:
                 ),
                 tooltip=quarter_tooltip,
                 on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
-                on_secondary_click=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
+                on_long_press=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
             )
             row_cells.append(quarter_cell)
 
@@ -2152,7 +2152,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | ПКМ на Чтв: удалить",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | Долгое нажатие на Чтв: удалить",
             size=11, color=ft.Colors.GREY_400,
         ))
 

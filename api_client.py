@@ -261,11 +261,21 @@ class EdonishAPI:
 
     def delete_mark(self, mark_id: str) -> Optional[Dict]:
         """Delete a mark by its ID."""
-        return self._request(
-            "POST",
-            self._url(JOURNAL_MARK_DELETE),
-            params={"mark_id": mark_id, "school_id": self.school_id},
-        )
+        # Try with JSON body first (some API versions require it)
+        try:
+            return self._request(
+                "POST",
+                self._url(JOURNAL_MARK_DELETE),
+                params={"school_id": self.school_id},
+                json={"mark_id": mark_id},
+            )
+        except Exception:
+            # Fallback to query params
+            return self._request(
+                "POST",
+                self._url(JOURNAL_MARK_DELETE),
+                params={"mark_id": mark_id, "school_id": self.school_id},
+            )
 
     def create_quarter_mark(
         self, student_id: int, quarter_property_id: int, mark: int,
