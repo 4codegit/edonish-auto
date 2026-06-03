@@ -71,18 +71,26 @@ from flet import (
 from config import (
     APP_NAME, APP_VERSION, MIN_GRADE, MAX_GRADE, DEFAULT_WORKERS,
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
-    SESSION_FILE,
+    SESSION_FILE, _get_app_dir,
 )
 from api_client import EdonishAPI, AuthenticationError
 from grade_engine import GradeEngine, GradePlan, weighted_random_grade
 
+# Mobile-safe logging: on Android, ~/ resolves to /data/ which is not writable.
+_APP_DIR = _get_app_dir()
+
+# Set up logging with mobile-safe file path
+_log_handlers = [logging.StreamHandler()]
+try:
+    _log_path = os.path.join(_APP_DIR, ".edonish_auto.log")
+    _log_handlers.append(logging.FileHandler(_log_path))
+except (PermissionError, OSError):
+    pass  # Skip file logging if not writable (e.g. sandboxed mobile)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(os.path.join(os.path.expanduser("~"), ".edonish_auto.log")),
-        logging.StreamHandler(),
-    ],
+    handlers=_log_handlers,
 )
 logger = logging.getLogger("edonish_auto")
 

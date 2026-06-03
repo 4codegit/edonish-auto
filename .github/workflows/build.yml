@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.16.0
+  APP_VERSION: 3.16.1
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -304,7 +304,12 @@ jobs:
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.16.0:
+            ### Что нового в v3.16.1:
+            - 🐛 ФИКС: Android — PermissionError при записи лог-файла и сессии
+            - 📱 Мобильные пути: лог и сессия теперь используют каталог приложения (/data/user/0/tj.edonish.auto/files/)
+            - 🔒 Безопасный fallback: если каталог недоступен — используется temp или пропускается файловое логирование
+
+            ### v3.16.0:
             - 📱 Добавлена Android версия! Скачайте APK и установите на телефон
             - 🖥️ Код адаптирован для мобильных устройств (защита desktop-only API)
             - 📦 Новый CI/CD pipeline для автоматической сборки APK

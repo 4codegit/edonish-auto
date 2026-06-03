@@ -1,5 +1,48 @@
 """Configuration for Edonish Auto"""
 import os
+import sys
+
+
+def _get_app_dir():
+    """Return a writable directory for app data (log, session).
+
+    On Android, os.path.expanduser('~') resolves to /data/ which is not
+    writable, causing PermissionError.  This helper detects the Android
+    environment and falls back to the app's internal storage or temp dir.
+    """
+    # Detect Android environment specifically
+    _is_android = (
+        'ANDROID_ARGUMENT' in os.environ
+        or 'ANDROID_ROOT' in os.environ
+        or os.path.exists('/system/bin/app_process')
+    )
+    if _is_android:
+        # On Android the app runs from /data/user/0/tj.edonish.auto/files/flet/app/
+        # The writable parent directory is /data/user/0/tj.edonish.auto/files/
+        for candidate in [
+            os.environ.get('FLET_APP_DATA'),
+            os.environ.get('APP_DATA'),
+            '/data/data/tj.edonish.auto/files',
+            '/data/user/0/tj.edonish.auto/files',
+        ]:
+            if candidate and os.path.isdir(candidate):
+                return candidate
+        # Try to derive from the script's own location
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # Walk up: .../files/flet/app -> .../files
+            parent = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
+            if os.path.isdir(parent) and os.access(parent, os.W_OK):
+                return parent
+        except Exception:
+            pass
+        # Last resort: try home, then temp
+        home = os.path.expanduser("~")
+        if os.access(home, os.W_OK):
+            return home
+        import tempfile
+        return tempfile.gettempdir()
+    return os.path.expanduser("~")
 
 # API Configuration
 API_BASE = "https://api.edonish.tj"
@@ -57,11 +100,11 @@ DEFAULT_BATCH_SIZE = 4
 
 # App settings
 APP_NAME = "eDonish Auto"
-APP_VERSION = "3.16.0"
+APP_VERSION = "3.16.1"
 APP_AUTHOR = "Edonish Auto Team"
 
-# Session file
-SESSION_FILE = os.path.join(os.path.expanduser("~"), ".edonish_session.json")
+# Session file — uses mobile-safe directory
+SESSION_FILE = os.path.join(_get_app_dir(), ".edonish_session.json")
 
 # Colors
 COLOR_PRIMARY = "#1a73e8"
