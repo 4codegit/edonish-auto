@@ -1,5 +1,5 @@
 Name:           edonish-auto
-Version:        3.12.0
+Version:        3.13.0
 Release:        1%{?dist}
 Summary:        Automated grade management for edonish.tj electronic journal
 
@@ -59,7 +59,7 @@ EOF
 %{_datadir}/applications/%{name}.desktop
 
 %changelog
-* Wed Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.12.0-1
+* Wed Jun 03 2026 Kamar Narziev <kamar@edonish.tj> - 3.13.0-1
 - Fixed dropdown on_select handlers for auto-grade page
 - Fixed class selection filtering subjects
 - Fixed Ctrl+S as global keyboard shortcut

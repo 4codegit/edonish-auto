@@ -73,7 +73,7 @@ from config import (
     SESSION_FILE,
 )
 from api_client import EdonishAPI, AuthenticationError
-from grade_engine import GradeEngine, GradePlan
+from grade_engine import GradeEngine, GradePlan, weighted_random_grade
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1603,6 +1603,17 @@ class EdonishAutoApp:
                     bottom=BorderSide(2, ft.Colors.BLUE_200),
                 ),
             ),
+            Container(
+                content=Icon(Icons.CASINO, size=14, color=ft.Colors.BLUE_400),
+                width=32,
+                padding=2,
+                bgcolor=ft.Colors.BLUE_50,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(2, ft.Colors.BLUE_200),
+                ),
+                tooltip="Рандомная оценка",
+            ),
         ]
         for d in dates:
             date_str = d.get("assignmentDate", "")[5:]  # MM-DD
@@ -1665,6 +1676,26 @@ class EdonishAutoApp:
                     content=Text(student_name, size=13, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                     width=180,
                     padding=4,
+                    bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    ),
+                ),
+                # Random grade button for this student
+                Container(
+                    content=IconButton(
+                        icon=Icons.CASINO,
+                        icon_size=14,
+                        tooltip="Рандомная оценка",
+                        style=ButtonStyle(
+                            padding=0,
+                            shape=ft.RoundedRectangleBorder(radius=4),
+                        ),
+                        on_click=lambda e, r=row_idx: self._on_random_grade_for_student(r),
+                    ),
+                    width=32,
+                    padding=0,
                     bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
                     border=Border(
                         right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
@@ -1938,6 +1969,32 @@ class EdonishAutoApp:
                 self.page.run_thread(self._safe_update)
 
         threading.Thread(target=do_delete, daemon=True).start()
+
+    def _on_random_grade_for_student(self, row: int):
+        """Add a random grade for a specific student in the first empty date cell."""
+        if not self._journal_loaded:
+            return
+
+        # Find the first empty cell for this student (row)
+        empty_col = None
+        for col in range(self._grid_cols):
+            data = self._grade_data.get((row, col))
+            if data and not data.get("current_value"):
+                empty_col = col
+                break
+
+        if empty_col is None:
+            # All cells filled — find the last cell and overwrite it
+            # Use the last date column
+            last_col = self._grid_cols - 1
+            if last_col >= 0:
+                empty_col = last_col
+            else:
+                self._show_snackbar("Нет дат для оценки")
+                return
+
+        grade = weighted_random_grade()
+        self._set_cell_grade(row, empty_col, grade)
 
     def _move_to_cell(self, row, col):
         """Move focus to a specific cell in the grid."""
