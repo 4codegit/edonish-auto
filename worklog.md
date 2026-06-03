@@ -1,5 +1,6 @@
 ---
 Task ID: 1
+<<<<<<< HEAD
 Agent: Main
 Task: Fix grade logic, auto-detect quarter, add signature feature, rebuild release
 
@@ -23,3 +24,24 @@ Stage Summary:
 - Quarter: auto-detected based on current date
 - Signature: new feature to add comments/signatures to students
 - CI pipeline running (#26843408474)
+=======
+Agent: Main Agent
+Task: Fix edonish-auto GUI crash (flet-desktop not bundled) and release v3.0.1
+
+Work Log:
+- Read main.py, build.yml, spec files, config.py, package.sh to understand the codebase
+- Identified root cause: `flet-desktop` package was not being installed or bundled by PyInstaller
+- Fixed main.py: removed `MaterialState` (removed in Flet 0.25+), removed `MatplotlibChart` (unused), added `IconButton` to imports, fixed `border.only()` -> `Border.only()`
+- Fixed build.yml: added `pip install flet-desktop`, added `--hidden-import=flet_desktop` and `--collect-all flet_desktop` to all 3 build jobs (Windows, Linux, macOS)
+- Rewrote edonish-auto.spec for Flet (was still referencing CustomTkinter)
+- Updated requirements.txt to include `flet-desktop>=0.25.0`
+- Bumped version to 3.0.1 in config.py, package.sh, edonish-auto.spec.rpm
+- Resolved git merge conflict (remote had a parallel fix attempt)
+- Pushed to GitHub and created v3.0.1 tag to trigger CI/CD release build
+
+Stage Summary:
+- All code fixes committed and pushed to main branch
+- v3.0.1 tag created and pushed → CI/CD pipeline triggered
+- Key fix: `flet-desktop` is now installed and bundled in PyInstaller builds
+- Release will include: .exe (Windows), .rpm + .deb (Linux), .dmg (macOS)
+>>>>>>> 01d93a4 (7e6b4625-eded-4853-92bd-47dc11ebf725)
