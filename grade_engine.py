@@ -1,4 +1,5 @@
 """Grade Engine - handles automated grade creation with parallel workers"""
+import math
 import random
 import time
 import logging
@@ -335,9 +336,9 @@ class GradeEngine:
                             grade = min(max(int(math.ceil(avg)), min_grade), max_grade)
                             self._log(f"  📊 {student_name}: ср.={avg:.2f} → ceil={grade} ({len(grade_values)} оценок)")
                         else:
-                            # No marks — fallback to weighted random
-                            grade = weighted_random_grade(min_grade, max_grade)
-                            self._log(f"  ⚠️ {student_name}: нет оценок, рандом={grade}")
+                            # No marks — SKIP this student, do NOT insert a quarter grade
+                            self._log(f"  ⏭️ {student_name}: нет оценок, четвертная пропущена")
+                            continue
 
                         curriculum_property_id = subject.get("curriculumPropertyId", 0)
                         task = GradeTask(

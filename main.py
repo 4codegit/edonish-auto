@@ -45,6 +45,7 @@ if getattr(sys, 'frozen', False):
         os.environ['FLET_VIEW_PATH'] = _flet_view_dir
 
 import json
+import math
 import threading
 import logging
 import time
@@ -570,7 +571,7 @@ class EdonishAutoApp:
         self.quarter_marks_btn = FilledButton(
             content=ft.Row([
                 ft.Icon(Icons.CALCULATE, size=18),
-                ft.Text("Четвертные", size=15, weight=FontWeight.W_600),
+                ft.Text("Вставить Чтв", size=15, weight=FontWeight.W_600),
             ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
             style=ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=10),
@@ -578,7 +579,7 @@ class EdonishAutoApp:
                 bgcolor=ft.Colors.AMBER_600,
             ),
             on_click=lambda _: self._on_set_quarter_marks(),
-            tooltip="Поставить четвертные оценки (ceil от среднего)",
+            tooltip="Вставить четвертные оценки (ceil от среднего, пропуская без оценок)",
         )
         self.delete_quarter_btn = OutlinedButton(
             content=ft.Row([
@@ -759,6 +760,32 @@ class EdonishAutoApp:
             disabled=True,
         )
 
+        self.journal_insert_quarter_btn = FilledButton(
+            content=ft.Row([
+                ft.Icon(Icons.CALCULATE, size=16),
+                ft.Text("Вставить Чтв", size=14, weight=FontWeight.W_500),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                bgcolor=ft.Colors.AMBER_600,
+            ),
+            on_click=lambda _: self._on_journal_insert_quarter(),
+            tooltip="Вставить четвертные оценки для текущего журнала",
+            visible=False,
+        )
+        self.journal_delete_quarter_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.REMOVE_CIRCLE_OUTLINE, size=16),
+                ft.Text("Удалить Чтв", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                color=ft.Colors.ORANGE_700,
+            ),
+            on_click=lambda _: self._on_journal_delete_quarter(),
+            tooltip="Удалить ТОЛЬКО четвертные оценки в текущем журнале",
+            visible=False,
+        )
         self.journal_clear_btn = OutlinedButton(
             content=ft.Row([
                 ft.Icon(Icons.CLEANING_SERVICES, size=16),
@@ -825,8 +852,12 @@ class EdonishAutoApp:
                                 Container(width=12),
                                 self.journal_save_btn,
                                 Container(width=12),
+                                self.journal_insert_quarter_btn,
+                                Container(width=8),
+                                self.journal_delete_quarter_btn,
+                                Container(width=8),
                                 self.journal_clear_btn,
-                            ], alignment=MainAxisAlignment.START),
+                            ], alignment=MainAxisAlignment.START, wrap=True),
                         ]),
                     ),
                 ),
@@ -1280,6 +1311,44 @@ class EdonishAutoApp:
             self._show_snackbar("Выберите класс, предмет и четверть!")
             return
 
+        # Confirmation dialog
+        self._ins_qt_dialog = AlertDialog(
+            modal=True,
+            title=Text("Вставка четвертных оценок", weight=FontWeight.W_700),
+            content=Text(
+                "Вставить четвертные оценки\n"
+                "для выбранных класса, предмета и четверти?\n\n"
+                "Расчёт: ceil(среднее арифметическое)\n"
+                "Ученики без оценок будут ПРОПУЩЕНЫ.",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_ins_qt_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Вставить четвертные", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.AMBER_600),
+                    on_click=lambda _: self._confirm_set_quarter_marks(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._ins_qt_dialog)
+        self._ins_qt_dialog.open = True
+        self.page.update()
+
+    def _close_ins_qt_dialog(self):
+        if hasattr(self, '_ins_qt_dialog') and self._ins_qt_dialog:
+            self._ins_qt_dialog.open = False
+            self.page.update()
+
+    def _confirm_set_quarter_marks(self):
+        self._close_ins_qt_dialog()
+        groups = self._get_selected_groups()
+        subjects = self._get_selected_subjects()
+        quarters = self._get_selected_quarters()
+
         self.quarter_marks_btn.disabled = True
         self.start_btn.disabled = True
         self.analyze_btn.disabled = True
@@ -1308,7 +1377,7 @@ class EdonishAutoApp:
                     self._log_message(f"Установка {qplan.total_tasks} четвертных оценок...")
                     self.engine.execute_quarter_marks(qplan)
                 else:
-                    self._log_message("Все четвертные оценки уже поставлены")
+                    self._log_message("Все четвертные оценки уже поставлены или нет оценок для расчёта")
             except Exception as e:
                 self._log_message(f"Ошибка четвертных: {e}", "error")
             finally:
@@ -1492,6 +1561,30 @@ class EdonishAutoApp:
                 self._log_message(f"Ошибка: {ex}", "error")
 
         threading.Thread(target=do_set, daemon=True).start()
+
+    def _on_delete_single_quarter_mark(self, row: int, quarter_mark_id: str):
+        """Delete a single student's quarter mark by double-clicking the quarter cell."""
+        if not quarter_mark_id:
+            self._show_snackbar("Нет четвертной оценки для удаления")
+            return
+
+        qdata = self._student_quarter_data.get(row)
+        student_name = ""
+        if qdata:
+            # We only have student_id in qdata, fetch name from grid display would be complex
+            pass
+
+        self._log_message(f"Удаление четвертной оценки (строка {row + 1})...")
+
+        def do_delete():
+            try:
+                result = self.api.delete_mark(mark_id=quarter_mark_id)
+                self._log_message(f"✅ Четвертная оценка удалена (строка {row + 1})")
+                self._reload_journal()
+            except Exception as ex:
+                self._log_message(f"Ошибка удаления четвертной: {ex}", "error")
+
+        threading.Thread(target=do_delete, daemon=True).start()
 
     def _reload_journal(self):
         """Reload the journal using the stored params (after grade operations)."""
@@ -1827,6 +1920,8 @@ class EdonishAutoApp:
             )
             self._journal_loaded = False
             self.journal_clear_btn.visible = False
+            self.journal_insert_quarter_btn.visible = False
+            self.journal_delete_quarter_btn.visible = False
             self.journal_save_btn.disabled = True
             self.page.update()
             return
@@ -1837,6 +1932,8 @@ class EdonishAutoApp:
 
         self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
         self.journal_clear_btn.visible = True
+        self.journal_insert_quarter_btn.visible = True
+        self.journal_delete_quarter_btn.visible = True
         self.journal_save_btn.disabled = False
         self._journal_loaded = True
 
@@ -1990,12 +2087,17 @@ class EdonishAutoApp:
                 avg = sum(grade_values) / len(grade_values)
                 ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
                 quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить)"
+                if quarter_mark_val:
+                    quarter_tooltip += " | двойной клик: удалить"
             else:
                 ceil_grade = None
-                quarter_tooltip = "Нет оценок для расчёта"
+                quarter_tooltip = "Нет оценок для расчёта четвертной"
 
             # Clickable quarter mark cell
             quarter_bgcolor = ft.Colors.AMBER_50 if quarter_mark_val else (ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE)
+            if not grade_values and not quarter_mark_val:
+                # No grades and no quarter mark — dimmed to show "not applicable"
+                quarter_bgcolor = ft.Colors.GREY_100
             quarter_cell = Container(
                 content=Text(quarter_mark_val, size=14, weight=FontWeight.W_500, text_align=TextAlign.CENTER),
                 width=44,
@@ -2004,9 +2106,11 @@ class EdonishAutoApp:
                 border=Border(
                     right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
                     bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    left=BorderSide(2, ft.Colors.AMBER_300) if quarter_mark_val else BorderSide(0, ft.Colors.TRANSPARENT),
                 ),
                 tooltip=quarter_tooltip,
                 on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
+                on_double_click=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
             )
             row_cells.append(quarter_cell)
 
@@ -2048,7 +2152,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить четвертную",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | Двойной клик на Чтв: удалить",
             size=11, color=ft.Colors.GREY_400,
         ))
 
@@ -2351,9 +2455,229 @@ class EdonishAutoApp:
 
         threading.Thread(target=run, daemon=True).start()
 
-    # ════════════════════════════════════════════════════════════════
-    #  CALLBACKS
-    # ════════════════════════════════════════════════════════════════
+    def _on_journal_insert_quarter(self):
+        """Insert quarter marks for the currently loaded journal."""
+        if not self._journal_loaded or not self._current_journal_params:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        # Confirmation dialog
+        self._jq_ins_dialog = AlertDialog(
+            modal=True,
+            title=Text("Вставка четвертных оценок", weight=FontWeight.W_700),
+            content=Text(
+                "Вставить четвертные оценки\n"
+                "для текущего журнала?\n\n"
+                "Расчёт: ceil(среднее арифметическое)\n"
+                "Ученики без оценок будут ПРОПУЩЕНЫ.",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_jq_ins_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Вставить", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.AMBER_600),
+                    on_click=lambda _: self._confirm_journal_insert_quarter(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._jq_ins_dialog)
+        self._jq_ins_dialog.open = True
+        self.page.update()
+
+    def _close_jq_ins_dialog(self):
+        if hasattr(self, '_jq_ins_dialog') and self._jq_ins_dialog:
+            self._jq_ins_dialog.open = False
+            self.page.update()
+
+    def _confirm_journal_insert_quarter(self):
+        self._close_jq_ins_dialog()
+        params = self._current_journal_params
+
+        self.journal_insert_quarter_btn.disabled = True
+        self.journal_delete_quarter_btn.disabled = True
+        self.journal_clear_btn.disabled = True
+        self._log_message("Вставка четвертных оценок в журнал...")
+        self.page.update()
+
+        def run():
+            try:
+                # Wait for API sync
+                time.sleep(1)
+
+                # Fetch fresh students data
+                students = self.api.get_journal_students(
+                    group_id=params["group_id"],
+                    subject_id=params["subject_id"],
+                    quarter_property_id=params["qprop_id"],
+                )
+
+                if not students:
+                    self._log_message("Нет студентов в журнале")
+                    return
+
+                inserted = 0
+                skipped = 0
+                failed = 0
+
+                for s in students:
+                    student_id = s["studentId"]
+                    student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
+
+                    # Check if quarter mark already exists
+                    quarter_marks = s.get("quarterMark", [])
+                    if quarter_marks and quarter_marks[0].get("shortName"):
+                        skipped += 1
+                        continue
+
+                    # Calculate ceil(average)
+                    grade_values = []
+                    for m in (s.get("subjectMarks") or []):
+                        sn = m.get("shortName", "")
+                        if sn and sn.isdigit():
+                            v = int(sn)
+                            if MIN_GRADE <= v <= MAX_GRADE:
+                                grade_values.append(v)
+
+                    if not grade_values:
+                        self._log_message(f"  ⏭️ {student_name}: нет оценок, пропущен")
+                        skipped += 1
+                        continue
+
+                    avg = sum(grade_values) / len(grade_values)
+                    grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                    self._log_message(f"  📊 {student_name}: ср.={avg:.2f} → Чтв={grade}")
+
+                    try:
+                        result = self.api.create_quarter_mark(
+                            student_id=student_id,
+                            quarter_property_id=params["qprop_id"],
+                            mark=grade,
+                            subject_id=params["subject_id"],
+                            curriculum_property_id=params.get("curriculum_property_id", 0),
+                        )
+                        if result and not (isinstance(result, dict) and result.get("error")):
+                            inserted += 1
+                        else:
+                            failed += 1
+                            self._log_message(f"  ❌ {student_name}: {result}", "error")
+                    except Exception as e:
+                        failed += 1
+                        self._log_message(f"  ❌ {student_name}: {e}", "error")
+
+                    time.sleep(0.15)
+
+                self._log_message(f"Четвертные: ✅ {inserted} вставлено, ⏭️ {skipped} пропущено, ❌ {failed} ошибок")
+            except Exception as e:
+                self._log_message(f"Ошибка вставки четвертных: {e}", "error")
+            finally:
+                self.journal_insert_quarter_btn.disabled = False
+                self.journal_delete_quarter_btn.disabled = False
+                self.journal_clear_btn.disabled = False
+                # Reload journal to reflect changes
+                self._reload_journal()
+                try:
+                    self.page.run_thread(self._safe_update)
+                except Exception:
+                    pass
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_journal_delete_quarter(self):
+        """Delete ONLY quarter marks for the currently loaded journal."""
+        if not self._journal_loaded or not self._current_journal_params:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        # Confirmation dialog
+        self._jq_del_dialog = AlertDialog(
+            modal=True,
+            title=Text("Удаление четвертных оценок", weight=FontWeight.W_700),
+            content=Text(
+                "Удалить ТОЛЬКО четвертные оценки\n"
+                "из текущего журнала?\n\n"
+                "Обычные оценки НЕ будут затронуты.",
+                size=15,
+            ),
+            actions=[
+                TextButton(
+                    content=Text("Отмена", size=15),
+                    on_click=lambda _: self._close_jq_del_dialog(),
+                ),
+                FilledButton(
+                    content=ft.Text("Удалить четвертные", size=15, weight=FontWeight.W_600),
+                    style=ButtonStyle(bgcolor=ft.Colors.ORANGE_600),
+                    on_click=lambda _: self._confirm_journal_delete_quarter(),
+                ),
+            ],
+        )
+        self.page.overlay.append(self._jq_del_dialog)
+        self._jq_del_dialog.open = True
+        self.page.update()
+
+    def _close_jq_del_dialog(self):
+        if hasattr(self, '_jq_del_dialog') and self._jq_del_dialog:
+            self._jq_del_dialog.open = False
+            self.page.update()
+
+    def _confirm_journal_delete_quarter(self):
+        self._close_jq_del_dialog()
+        params = self._current_journal_params
+
+        self.journal_delete_quarter_btn.disabled = True
+        self.journal_insert_quarter_btn.disabled = True
+        self.journal_clear_btn.disabled = True
+        self._log_message("Удаление четвертных оценок из журнала...")
+        self.page.update()
+
+        def run():
+            try:
+                # Fetch fresh students data
+                students = self.api.get_journal_students(
+                    group_id=params["group_id"],
+                    subject_id=params["subject_id"],
+                    quarter_property_id=params["qprop_id"],
+                )
+
+                if not students:
+                    self._log_message("Нет студентов в журнале")
+                    return
+
+                deleted = 0
+                failed = 0
+
+                for s in students:
+                    student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
+                    for qm in (s.get("quarterMark") or []):
+                        qm_id = qm.get("quarterMarkId") or qm.get("assignmentMarkId") or qm.get("id")
+                        if qm_id and qm.get("shortName"):
+                            try:
+                                self.api.delete_mark(mark_id=qm_id)
+                                deleted += 1
+                                self._log_message(f"  🗑️ {student_name}: четвертная {qm.get('shortName')} удалена")
+                            except Exception as e:
+                                failed += 1
+                                self._log_message(f"  ❌ {student_name}: {e}", "error")
+                            time.sleep(0.1)
+
+                self._log_message(f"Удаление четвертных: ✅ {deleted} удалено, ❌ {failed} ошибок")
+            except Exception as e:
+                self._log_message(f"Ошибка удаления четвертных: {e}", "error")
+            finally:
+                self.journal_delete_quarter_btn.disabled = False
+                self.journal_insert_quarter_btn.disabled = False
+                self.journal_clear_btn.disabled = False
+                # Reload journal to reflect changes
+                self._reload_journal()
+                try:
+                    self.page.run_thread(self._safe_update)
+                except Exception:
+                    pass
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _on_progress(self, plan: GradePlan):
         """Called from engine worker threads — update UI safely via Flet thread."""
