@@ -2089,14 +2089,14 @@ class EdonishAutoApp:
             if grade_values:
                 avg = sum(grade_values) / len(grade_values)
                 ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
-                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: вставить/пересчитать)"
+                quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (кнопка 'Вставить Чтв')"
                 if quarter_mark_val:
                     quarter_tooltip += " | долгое нажатие: удалить"
             else:
                 ceil_grade = None
                 quarter_tooltip = "Нет оценок для расчёта четвертной"
 
-            # Clickable quarter mark cell
+            # Quarter mark cell — display-only; insertion only via "Вставить Чтв" button
             quarter_bgcolor = ft.Colors.AMBER_50 if quarter_mark_val else (ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE)
             if not grade_values and not quarter_mark_val:
                 # No grades and no quarter mark — dimmed to show "not applicable"
@@ -2112,7 +2112,6 @@ class EdonishAutoApp:
                     left=BorderSide(2, ft.Colors.AMBER_300) if quarter_mark_val else BorderSide(0, ft.Colors.TRANSPARENT),
                 ),
                 tooltip=quarter_tooltip,
-                on_click=lambda e, r=row_idx: self._on_set_quarter_mark(r),
                 on_long_press=lambda e, r=row_idx, qmid=quarter_mark_id: self._on_delete_single_quarter_mark(r, qmid),
             )
             row_cells.append(quarter_cell)
@@ -2155,7 +2154,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Клик на Чтв: вставить | Долгое нажатие на Чтв: удалить",
+            "Стрелки: навигация | Цифра 3-10: поставить оценку | Delete: удалить | Кнопка 'Вставить Чтв': вставить четвертные | Долгое нажатие на Чтв: удалить",
             size=11, color=ft.Colors.GREY_400,
         ))
 
