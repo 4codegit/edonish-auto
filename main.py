@@ -77,7 +77,7 @@ from flet import (
 from config import (
     APP_NAME, APP_VERSION, MIN_GRADE, MAX_GRADE, DEFAULT_WORKERS,
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
-    SESSION_FILE,
+    SESSION_FILE, API_PREFIXES,
 )
 from api_client import EdonishAPI, AuthenticationError
 from grade_engine import GradeEngine, GradePlan
@@ -296,7 +296,39 @@ class EdonishAutoApp:
     def _build_dashboard_view(self, user_info):
         """Build main dashboard with navigation rail + content area."""
         name = f"{user_info.get('last_name', '')} {user_info.get('first_name', '')}"
-        school_info = f"Школа ID: {self.api.school_id} | {self.api.role}"
+        school_info = f"Школа ID: {self.api.school_id}"
+
+        # ── Role selector ─────────────────────────────────────────
+        # Build role dropdown from user's available roles
+        available_roles = []
+        if hasattr(self.api, 'user_info') and self.api.user_info:
+            available_roles = self.api.user_info.get("roles", [])
+
+        # Also include all known API roles as fallback
+        all_known_roles = list(API_PREFIXES.keys())
+        role_options = []
+        seen = set()
+        # Add user's actual roles first
+        for r in available_roles:
+            rname = r.get("name", "") if isinstance(r, dict) else str(r)
+            if rname and rname not in seen:
+                role_options.append(dropdown.Option(rname))
+                seen.add(rname)
+        # Then add all known roles
+        for rname in all_known_roles:
+            if rname not in seen:
+                role_options.append(dropdown.Option(rname))
+                seen.add(rname)
+
+        current_role = self.api.role or "teacher"
+        self.role_dropdown = Dropdown(
+            options=role_options,
+            value=current_role,
+            width=200,
+            text_size=13,
+            content_padding=ft.controls.padding.Padding(left=8, top=4, right=8, bottom=4),
+            on_select=self._on_role_change,
+        )
 
         # ── Navigation Rail ─────────────────────────────────────────
         self.nav_rail = NavigationRail(
@@ -351,6 +383,12 @@ class EdonishAutoApp:
                         Text(school_info, size=12, color=ft.Colors.GREY_500),
                     ], spacing=8),
                     padding=0,
+                ),
+                Container(
+                    content=Row([
+                        Icon(Icons.ADMIN_PANEL_SETTINGS, size=16, color=ft.Colors.GREY_600),
+                        self.role_dropdown,
+                    ], spacing=4),
                 ),
                 IconButton(
                     icon=Icons.DARK_MODE_OUTLINED,
@@ -424,6 +462,18 @@ class EdonishAutoApp:
         else:
             self.page.theme_mode = ft.ThemeMode.DARK
         self.page.update()
+
+    def _on_role_change(self, e):
+        """Change the API role prefix on the fly."""
+        new_role = e.control.value
+        if not new_role:
+            return
+        old_role = self.api.role
+        self.api.role = new_role
+        self.api.role_prefix = API_PREFIXES.get(new_role, "/teacher/v1")
+        self._log_message(f"Роль изменена: {old_role} → {new_role} (prefix: {self.api.role_prefix})")
+        # Reload journal data with new role
+        self._load_initial_data()
 
     # ════════════════════════════════════════════════════════════════
     #  AUTO GRADE PAGE
@@ -914,11 +964,19 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _build_logs_page(self):
-        """Logs viewer page."""
-        self.logs_list = Column(
-            scroll=ScrollMode.AUTO,
+        """Logs viewer page with copyable text."""
+        # Use a read-only TextField so user can select and copy log text
+        self.logs_text_field = TextField(
+            value="",
+            multiline=True,
+            read_only=True,
             expand=True,
-            spacing=2,
+            text_size=13,
+            font_family="Roboto Mono",
+            border_color=ft.Colors.TRANSPARENT,
+            focused_border_color=ft.Colors.TRANSPARENT,
+            cursor_color=ft.Colors.TRANSPARENT,
+            content_padding=ft.controls.padding.Padding(left=12, top=8, right=12, bottom=8),
         )
 
         clear_btn = OutlinedButton(
@@ -932,6 +990,17 @@ class EdonishAutoApp:
             on_click=lambda _: self._clear_logs(),
         )
 
+        copy_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.CONTENT_COPY, size=16),
+                ft.Text("Копировать", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+            ),
+            on_click=lambda _: self._copy_logs(),
+        )
+
         self.logs_page = Column(
             expand=True,
             controls=[
@@ -939,6 +1008,8 @@ class EdonishAutoApp:
                     Icon(Icons.TERMINAL, size=24, color=ft.Colors.BLUE_600),
                     Text("Логи", size=20, weight=FontWeight.W_600),
                     Container(expand=True),
+                    copy_btn,
+                    Container(width=8),
                     clear_btn,
                 ], spacing=10),
                 Container(height=12),
@@ -946,9 +1017,9 @@ class EdonishAutoApp:
                     elevation=2,
                     expand=True,
                     content=Container(
-                        padding=16,
+                        padding=4,
                         expand=True,
-                        content=self.logs_list,
+                        content=self.logs_text_field,
                     ),
                 ),
             ],
@@ -1023,7 +1094,98 @@ class EdonishAutoApp:
     def _on_login_success(self, user_info):
         self._logged_in = True
         self._build_dashboard_view(user_info)
-        self._load_initial_data()
+        # Load initial data in a background thread to avoid blocking UI
+        threading.Thread(target=self._load_initial_data_thread, daemon=True).start()
+
+    def _load_initial_data_thread(self):
+        """Load initial data in background thread — all API calls off the UI thread."""
+        self._log_message("Загрузка данных журнала...")
+        self._loading_data = True
+        try:
+            self.journal_options = self.api.get_journal_options()
+            groups = []
+            subjects_set = set()
+
+            if self.journal_options and "groups" in self.journal_options:
+                for g in self.journal_options["groups"]:
+                    group_name = f"{g.get('number', '')}{g.get('name', '')}"
+                    groups.append({
+                        "id": g["id"],
+                        "name": group_name,
+                        "number": g.get("number", ""),
+                        "group": g.get("name", ""),
+                        "edit": g.get("edit", False),
+                        "myClass": g.get("myClass", False),
+                    })
+                    for s in g.get("subjects", []):
+                        subj_key = (s["subjectId"], s["subjectName"])
+                        subjects_set.add(subj_key)
+
+            self.groups_data = groups
+            self.teacher_subjects = [
+                {"subjectId": sid, "subjectName": sname} for sid, sname in subjects_set
+            ]
+
+            # Build quarters from journal_options
+            quarters_by_name = {}
+            for g in self.journal_options.get("groups", []):
+                for q in g.get("quarters", []):
+                    qname = q.get("name", "")
+                    if qname and qname not in quarters_by_name:
+                        quarters_by_name[qname] = {
+                            "qpropId": q["id"],
+                            "name": qname,
+                            "startDate": q.get("startDate", ""),
+                            "endDate": q.get("endDate", ""),
+                            "currentQuarter": q.get("currentQuarter", False),
+                        }
+            self.quarters_data = list(quarters_by_name.values())
+
+            # Build subjects with curriculumPropertyId
+            subjects_with_curriculum = {}
+            for g in self.journal_options.get("groups", []):
+                for s in g.get("subjects", []):
+                    sid = s["subjectId"]
+                    if sid not in subjects_with_curriculum:
+                        subjects_with_curriculum[sid] = {
+                            "subjectId": sid,
+                            "subjectName": s["subjectName"],
+                            "curriculumPropertyId": s.get("curriculumPropertyId", 0),
+                        }
+            self.teacher_subjects = list(subjects_with_curriculum.values())
+
+            # Enrich groups_data
+            for gd in self.groups_data:
+                for g in self.journal_options.get("groups", []):
+                    gname = f"{g.get('number', '')}{g.get('name', '')}"
+                    if gname == gd["name"]:
+                        gd["quarters"] = [
+                            {
+                                "qpropId": q["id"],
+                                "name": q.get("name", ""),
+                                "startDate": q.get("startDate", ""),
+                                "endDate": q.get("endDate", ""),
+                                "currentQuarter": q.get("currentQuarter", False),
+                            }
+                            for q in g.get("quarters", [])
+                        ]
+                        gd["subjects"] = [
+                            {
+                                "subjectId": s["subjectId"],
+                                "subjectName": s["subjectName"],
+                                "curriculumPropertyId": s.get("curriculumPropertyId", 0),
+                            }
+                            for s in g.get("subjects", [])
+                        ]
+                        break
+
+            # Update UI from background thread via run_thread
+            self.page.run_thread(self._update_dropdowns)
+
+        except Exception as e:
+            self._log_message(f"Ошибка загрузки: {e}", "error")
+        finally:
+            self._loading_data = False
 
     def _on_login_error(self, error_msg):
         self.login_btn.disabled = False
@@ -1059,98 +1221,8 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _load_initial_data(self):
-        self._log_message("Загрузка данных журнала...")
-        self._loading_data = True
-
-        def load():
-            try:
-                self.journal_options = self.api.get_journal_options()
-                groups = []
-                subjects_set = set()
-
-                if self.journal_options and "groups" in self.journal_options:
-                    for g in self.journal_options["groups"]:
-                        group_name = f"{g.get('number', '')}{g.get('name', '')}"
-                        groups.append({
-                            "id": g["id"],
-                            "name": group_name,
-                            "number": g.get("number", ""),
-                            "group": g.get("name", ""),
-                            "edit": g.get("edit", False),
-                            "myClass": g.get("myClass", False),
-                        })
-                        for s in g.get("subjects", []):
-                            subj_key = (s["subjectId"], s["subjectName"])
-                            subjects_set.add(subj_key)
-
-                self.groups_data = groups
-                self.teacher_subjects = [
-                    {"subjectId": sid, "subjectName": sname} for sid, sname in subjects_set
-                ]
-
-                # Build quarters from journal_options (group-specific, not school-level)
-                # school-level get_quarters() returns wrong qpropId for specific groups
-                quarters_by_name = {}
-                for g in self.journal_options.get("groups", []):
-                    for q in g.get("quarters", []):
-                        qname = q.get("name", "")
-                        if qname and qname not in quarters_by_name:
-                            quarters_by_name[qname] = {
-                                "qpropId": q["id"],
-                                "name": qname,
-                                "startDate": q.get("startDate", ""),
-                                "endDate": q.get("endDate", ""),
-                                "currentQuarter": q.get("currentQuarter", False),
-                            }
-                self.quarters_data = list(quarters_by_name.values())
-
-                # Build subjects with curriculumPropertyId from journal_options
-                subjects_with_curriculum = {}
-                for g in self.journal_options.get("groups", []):
-                    for s in g.get("subjects", []):
-                        sid = s["subjectId"]
-                        if sid not in subjects_with_curriculum:
-                            subjects_with_curriculum[sid] = {
-                                "subjectId": sid,
-                                "subjectName": s["subjectName"],
-                                "curriculumPropertyId": s.get("curriculumPropertyId", 0),
-                            }
-                self.teacher_subjects = list(subjects_with_curriculum.values())
-
-                # Enrich groups_data with group-specific quarters and subjects
-                # (each group has its own quarter IDs and subject list)
-                for gd in self.groups_data:
-                    for g in self.journal_options.get("groups", []):
-                        gname = f"{g.get('number', '')}{g.get('name', '')}"
-                        if gname == gd["name"]:
-                            gd["quarters"] = [
-                                {
-                                    "qpropId": q["id"],
-                                    "name": q.get("name", ""),
-                                    "startDate": q.get("startDate", ""),
-                                    "endDate": q.get("endDate", ""),
-                                    "currentQuarter": q.get("currentQuarter", False),
-                                }
-                                for q in g.get("quarters", [])
-                            ]
-                            gd["subjects"] = [
-                                {
-                                    "subjectId": s["subjectId"],
-                                    "subjectName": s["subjectName"],
-                                    "curriculumPropertyId": s.get("curriculumPropertyId", 0),
-                                }
-                                for s in g.get("subjects", [])
-                            ]
-                            break
-
-                self._update_dropdowns()
-
-            except Exception as e:
-                self._log_message(f"Ошибка загрузки: {e}", "error")
-            finally:
-                self._loading_data = False
-
-        threading.Thread(target=load, daemon=True).start()
+        """Load initial data — runs in background thread."""
+        threading.Thread(target=self._load_initial_data_thread, daemon=True).start()
 
     def _update_dropdowns(self):
         class_options = [dropdown.Option("Все классы")] + [
@@ -3026,24 +3098,40 @@ class EdonishAutoApp:
     def _log_message(self, message: str, level: str = "info"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         prefix = {"info": "INFO", "warning": "WARN", "error": "ERR!"}.get(level, "INFO")
-        color = {"info": ft.Colors.GREY_800, "warning": ft.Colors.ORANGE_700, "error": ft.Colors.RED_700}.get(level, ft.Colors.GREY_800)
         line = f"[{timestamp}] [{prefix}] {message}"
+        self._logs_lines.append(line)
+        # Keep max 1000 lines
+        if len(self._logs_lines) > 1000:
+            self._logs_lines = self._logs_lines[-1000:]
 
         try:
-            self.logs_list.controls.append(
-                Text(line, size=13, font_family="Roboto Mono", color=color)
-            )
-            # Keep max 500 lines
-            if len(self.logs_list.controls) > 500:
-                self.logs_list.controls = self.logs_list.controls[-500:]
+            if hasattr(self, 'logs_text_field') and self.logs_text_field:
+                self.logs_text_field.value = "\n".join(self._logs_lines)
             self.page.update()
         except Exception:
             pass
 
+        # Also log to Python logger
+        if level == "error":
+            logger.error(message)
+        elif level == "warning":
+            logger.warning(message)
+        else:
+            logger.info(message)
+
     def _clear_logs(self):
-        self.logs_list.controls.clear()
+        self._logs_lines = []
+        if hasattr(self, 'logs_text_field') and self.logs_text_field:
+            self.logs_text_field.value = ""
         self._log_message("Логи очищены")
         self.page.update()
+
+    def _copy_logs(self):
+        """Copy all logs to clipboard so user can share them."""
+        if self._logs_lines:
+            text = "\n".join(self._logs_lines)
+            self.page.set_clipboard(text)
+            self._show_snackbar("Логи скопированы в буфер обмена")
 
     def _safe_update(self):
         """Thread-safe page update helper — safe to call from any thread.
