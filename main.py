@@ -46,6 +46,7 @@ if getattr(sys, 'frozen', False):
 
 import json
 import math
+import random
 import threading
 import logging
 import time
@@ -799,6 +800,28 @@ class EdonishAutoApp:
             tooltip="Удалить все оценки в журнале",
             visible=False,
         )
+        self.journal_topic_field = TextField(
+            label="Тема урока",
+            width=250,
+            text_size=14,
+            height=45,
+            visible=False,
+            hint_text="Введите тему урока",
+        )
+        self.journal_fill_topics_btn = ElevatedButton(
+            content=ft.Row([
+                ft.Icon(Icons.EDIT_NOTE, size=16),
+                ft.Text("Заполнить темы", size=14, weight=FontWeight.W_500),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                bgcolor=ft.Colors.TEAL_100,
+                color=ft.Colors.TEAL_700,
+            ),
+            on_click=lambda _: self._on_fill_topics(),
+            tooltip="Заполнить тему урока для всех пустых дат",
+            visible=False,
+        )
 
         self.journal_student_count = Text("", size=13, color=ft.Colors.GREY_500)
 
@@ -857,6 +880,12 @@ class EdonishAutoApp:
                                 self.journal_delete_quarter_btn,
                                 Container(width=8),
                                 self.journal_clear_btn,
+                            ], alignment=MainAxisAlignment.START, wrap=True),
+                            Container(height=8),
+                            Row([
+                                self.journal_topic_field,
+                                Container(width=8),
+                                self.journal_fill_topics_btn,
                             ], alignment=MainAxisAlignment.START, wrap=True),
                         ]),
                     ),
@@ -1915,6 +1944,7 @@ class EdonishAutoApp:
         self._grade_data = {}
         self._selected_cell = None
         self._student_quarter_data = {}
+        self._journal_dates = []  # Store dates for random grade and topic features
 
         if not students:
             self.journal_grid_container.content = Column(
@@ -1926,6 +1956,8 @@ class EdonishAutoApp:
             self.journal_insert_quarter_btn.visible = False
             self.journal_delete_quarter_btn.visible = False
             self.journal_save_btn.disabled = True
+            self.journal_topic_field.visible = False
+            self.journal_fill_topics_btn.visible = False
             self.page.update()
             return
 
@@ -1933,11 +1965,15 @@ class EdonishAutoApp:
         if dates_data and dates_data[0].get("days"):
             dates = dates_data[0]["days"]
 
+        self._journal_dates = dates  # Store for random grade and topic features
+
         self.journal_student_count.value = f"{len(students)} учеников | {len(dates)} дат"
         self.journal_clear_btn.visible = True
         self.journal_insert_quarter_btn.visible = True
         self.journal_delete_quarter_btn.visible = True
         self.journal_save_btn.disabled = False
+        self.journal_topic_field.visible = True
+        self.journal_fill_topics_btn.visible = True
         self._journal_loaded = True
 
         self._grid_rows = len(students)
@@ -1965,12 +2001,32 @@ class EdonishAutoApp:
                     bottom=BorderSide(2, ft.Colors.BLUE_200),
                 ),
             ),
+            Container(
+                content=Text("🎲", size=14, text_align=TextAlign.CENTER),
+                width=36,
+                padding=2,
+                bgcolor=ft.Colors.BLUE_50,
+                border=Border(
+                    right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    bottom=BorderSide(2, ft.Colors.BLUE_200),
+                ),
+                tooltip="Рандом оценки для ученика",
+            ),
         ]
         for d in dates:
             date_str = d.get("assignmentDate", "")[5:]  # MM-DD
+            assignment = d.get("assignment", "") or d.get("topic", "")
+            # Show date + assignment topic below
+            header_content = Column([
+                Text(date_str, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+            ], spacing=0, alignment=CrossAxisAlignment.CENTER)
+            if assignment:
+                header_content.controls.append(
+                    Text(assignment[:12], size=8, color=ft.Colors.GREY_600, text_align=TextAlign.CENTER, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+                )
             header_cells.append(
                 Container(
-                    content=Text(date_str, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    content=header_content,
                     width=48,
                     padding=2,
                     bgcolor=ft.Colors.BLUE_50,
@@ -2032,6 +2088,25 @@ class EdonishAutoApp:
                         right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
                         bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
                     ),
+                ),
+                # 🎲 Random grade button for this student
+                Container(
+                    content=IconButton(
+                        icon=Icons.CASINO,
+                        icon_size=16,
+                        icon_color=ft.Colors.TEAL_600,
+                        tooltip=f"Рандом оценки: {student_name}",
+                        on_click=lambda e, r=row_idx: self._on_random_grades_for_student(r),
+                        style=ButtonStyle(padding=0),
+                    ),
+                    width=36,
+                    padding=2,
+                    bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
+                    border=Border(
+                        right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                        bottom=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
+                    ),
+                    alignment=ft.Alignment(0, 0),
                 ),
             ]
 
@@ -2380,6 +2455,144 @@ class EdonishAutoApp:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 target.focus()
+
+    def _on_random_grades_for_student(self, row: int):
+        """Fill all empty cells for a specific student with random grades."""
+        if not self._journal_loaded:
+            return
+
+        min_grade = int(self.min_grade_field.value or MIN_GRADE)
+        max_grade = int(self.max_grade_field.value or MAX_GRADE)
+        dates = self._journal_dates
+
+        # Collect empty cells for this student
+        tasks = []  # list of (col_idx, date_id, qprop_id, grade)
+        for col_idx in range(self._grid_cols):
+            data = self._grade_data.get((row, col_idx))
+            if not data:
+                continue
+            current_val = data.get("current_value", "")
+            if current_val and str(current_val).strip():
+                continue  # Skip non-empty cells
+
+            # Generate random grade
+            grade = random.randint(min_grade, max_grade)
+            tasks.append((col_idx, data["date_id"], data["qprop_id"], grade))
+
+        if not tasks:
+            self._show_snackbar("Нет пустых ячеек для заполнения")
+            return
+
+        student_name = ""
+        qdata = self._student_quarter_data.get(row, {})
+        student_id = qdata.get("student_id", 0)
+
+        # Find student name from first cell data
+        for col_idx in range(self._grid_cols):
+            data = self._grade_data.get((row, col_idx))
+            if data:
+                break
+
+        self._log_message(f"🎲 Рандом оценок: строка {row + 1}, {len(tasks)} пустых ячеек")
+
+        def do_random():
+            completed = 0
+            failed = 0
+            for col_idx, date_id, qprop_id, grade in tasks:
+                try:
+                    # Delete existing mark if any
+                    data = self._grade_data.get((row, col_idx))
+                    existing_mark_id = data.get("mark_id", "") if data else ""
+                    if existing_mark_id:
+                        try:
+                            self.api.delete_mark(mark_id=existing_mark_id)
+                        except Exception:
+                            pass
+
+                    result = self.api.create_mark(
+                        student_id=student_id,
+                        assignment_date_id=date_id,
+                        mark=grade,
+                        quarter_property_id=qprop_id,
+                    )
+                    if result and not (isinstance(result, dict) and result.get("error")):
+                        completed += 1
+                        # Update cell visually
+                        cell = self._grade_cells.get((row, col_idx))
+                        if cell and data:
+                            cell.value = str(grade)
+                            cell.bgcolor = ft.Colors.GREEN_50
+                            cell.border_color = ft.Colors.TRANSPARENT
+                            data["current_value"] = str(grade)
+                            data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
+                    else:
+                        failed += 1
+                except Exception as e:
+                    failed += 1
+                    self._log_message(f"  ❌ Ошибка: {e}", "error")
+
+                time.sleep(0.15)
+
+            self._log_message(f"🎲 Рандом: ✅ {completed} оценок поставлено, ❌ {failed} ошибок (строка {row + 1})")
+            self.page.run_thread(self._safe_update)
+
+        threading.Thread(target=do_random, daemon=True).start()
+
+    def _on_fill_topics(self):
+        """Fill topic/assignment text for all dates in the current journal."""
+        if not self._journal_loaded or not self._current_journal_params:
+            self._show_snackbar("Сначала загрузите журнал!")
+            return
+
+        topic_text = self.journal_topic_field.value
+        if not topic_text or not topic_text.strip():
+            self._show_snackbar("Введите тему урока!")
+            return
+
+        topic_text = topic_text.strip()
+        dates = self._journal_dates
+        params = self._current_journal_params
+        qprop_id = params.get("qprop_id", 0)
+
+        self._log_message(f"📝 Заполнение тем: '{topic_text}' для {len(dates)} дат...")
+
+        self.journal_fill_topics_btn.disabled = True
+        self.page.update()
+
+        def do_fill():
+            completed = 0
+            failed = 0
+            for d in dates:
+                date_id = d.get("assignmentDateId", "")
+                if not date_id:
+                    continue
+                # Skip dates that already have a topic
+                existing_topic = d.get("assignment", "") or d.get("topic", "")
+                if existing_topic:
+                    continue
+                try:
+                    result = self.api.update_assignment(
+                        assignment_date_id=date_id,
+                        assignment=topic_text,
+                        quarter_property_id=qprop_id,
+                    )
+                    if result:
+                        completed += 1
+                    else:
+                        failed += 1
+                except Exception as e:
+                    failed += 1
+                    self._log_message(f"  ❌ Ошибка темы: {e}", "error")
+
+                time.sleep(0.1)
+
+            self._log_message(f"📝 Темы: ✅ {completed} заполнено, ❌ {failed} ошибок")
+            self.journal_fill_topics_btn.disabled = False
+            # Reload journal to show updated topics
+            self._reload_journal()
+            self.page.run_thread(self._safe_update)
+
+        threading.Thread(target=do_fill, daemon=True).start()
 
     def _on_clear_all_grades(self):
         """Clear all grades in the current journal view with confirmation."""

@@ -10,7 +10,8 @@ from config import (
     JOURNAL_MARK_CREATE, JOURNAL_MARK_DELETE, JOURNAL_QUARTER_DELETE,
     JOURNAL_QUARTER_CREATE, JOURNAL_SEMESTER_CREATE, JOURNAL_YEAR_CREATE,
     JOURNAL_DATES_FINAL, JOURNAL_STUDENTS_FINAL, GROUPS_LIST, PERIOD_QUARTERS,
-    TEACHER_SUBJECT, SUBGROUPS, LANG_RU, MIN_GRADE, MAX_GRADE
+    TEACHER_SUBJECT, SUBGROUPS, JOURNAL_ASSIGNMENT_UPDATE,
+    LANG_RU, MIN_GRADE, MAX_GRADE
 )
 
 logger = logging.getLogger("edonish_auto")
@@ -241,10 +242,18 @@ class EdonishAPI:
         student_id: int,
         assignment_date_id: str,
         mark: int,
-        mark_type_id: int = 8,
+        mark_type_id: int = None,
         quarter_property_id: int = None,
     ) -> Optional[Dict]:
-        """Create a mark for a student on a specific date."""
+        """Create a mark for a student on a specific date.
+
+        In the edonish 10-point system, mark_type_id is the ID from the
+        marks_ten_point reference table where ID equals the mark value.
+        So mark_type_id MUST match the grade value (3-10).
+        """
+        # In 10-point system, mark_type_id = mark value (not a fixed type code)
+        if mark_type_id is None:
+            mark_type_id = mark
         body = {
             "mark_type_id": mark_type_id,
             "group_subgroup_student_id": student_id,
@@ -441,6 +450,25 @@ class EdonishAPI:
         return self._request(
             "POST",
             self._url(JOURNAL_COMMENT),
+            params={"school_id": self.school_id},
+            json=body,
+        )
+
+    def update_assignment(
+        self,
+        assignment_date_id: str,
+        assignment: str,
+        quarter_property_id: int = None,
+    ) -> Optional[Dict]:
+        """Update the topic/assignment text for a date column in the journal."""
+        body = {
+            "schedule_date_id": assignment_date_id,
+            "assignment": assignment,
+            "quarter_property_id": quarter_property_id or 0,
+        }
+        return self._request(
+            "POST",
+            self._url(JOURNAL_ASSIGNMENT_UPDATE),
             params={"school_id": self.school_id},
             json=body,
         )
