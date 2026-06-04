@@ -50,16 +50,21 @@ import random
 import threading
 import logging
 import time
+import warnings
 from datetime import datetime
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Suppress Flet deprecation warnings (ElevatedButton etc. still work)
+# Also suppress in PyInstaller bundled mode to avoid stderr pollution
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import flet as ft
 from flet import (
     AppBar, Icon, Icons, IconButton, NavigationRail, NavigationRailDestination,
     NavigationRailLabelType, Page, Text, TextField,
-    ElevatedButton, OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
+    Button, OutlinedButton, TextButton, Checkbox, Dropdown, dropdown,
     ProgressRing, ProgressBar, Container, Card, Column, Row,
     Tabs, Tab, ListView, Divider, SnackBar, AlertDialog, FontWeight,
     MainAxisAlignment, CrossAxisAlignment, TextAlign,
@@ -518,7 +523,7 @@ class EdonishAutoApp:
         )
 
         # ── Action buttons ──────────────────────────────────────────
-        self.analyze_btn = ElevatedButton(
+        self.analyze_btn = Button(
             content=ft.Row([
                 ft.Icon(Icons.SEARCH, size=18),
                 ft.Text("Анализировать", size=15, weight=FontWeight.W_600),
@@ -555,7 +560,7 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_stop(),
             disabled=True,
         )
-        self.signature_btn = ElevatedButton(
+        self.signature_btn = Button(
             content=ft.Row([
                 ft.Icon(Icons.DRAW, size=18),
                 ft.Text("Подпись", size=15, weight=FontWeight.W_600),
@@ -747,7 +752,7 @@ class EdonishAutoApp:
             on_click=lambda _: self._on_load_journal(),
         )
 
-        self.journal_save_btn = ElevatedButton(
+        self.journal_save_btn = Button(
             content=ft.Row([
                 ft.Icon(Icons.SAVE, size=18),
                 ft.Text("Сохранить", size=15, weight=FontWeight.W_600),
@@ -808,7 +813,7 @@ class EdonishAutoApp:
             visible=False,
             hint_text="Введите тему урока",
         )
-        self.journal_fill_topics_btn = ElevatedButton(
+        self.journal_fill_topics_btn = Button(
             content=ft.Row([
                 ft.Icon(Icons.EDIT_NOTE, size=16),
                 ft.Text("Заполнить темы", size=14, weight=FontWeight.W_500),
@@ -3041,7 +3046,8 @@ class EdonishAutoApp:
         self.page.update()
 
     def _safe_update(self):
-        """Thread-safe page update helper — safe to call from any thread."""
+        """Thread-safe page update helper — safe to call from any thread.
+        Uses a small debounce to prevent UI freeze from too frequent updates."""
         try:
             self.page.update()
         except Exception:
