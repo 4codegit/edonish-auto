@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.26.0
+  APP_VERSION: 3.27.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -220,6 +220,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
@@ -230,23 +233,29 @@ jobs:
           flet build apk \
             --project edonish-auto \
             --description "Automated grade management for edonish.tj" \
-            --bundle-id tj.edonish.auto \
-            --include *.py config.py api_client.py grade_engine.py
+            --bundle-id tj.edonish.auto
 
       - name: Move APK to dist
         run: |
           mkdir -p dist/android
           # flet build apk outputs to build/apk/ directory
-          if [ -f build/apk/edonish-auto.apk ]; then
-            cp build/apk/edonish-auto.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
-          elif [ -f build/apk/*.apk ]; then
-            cp build/apk/*.apk dist/android/
+          # Use find to reliably locate APK regardless of exact filename
+          APK_FILE=$(find build/apk/ -name '*.apk' -type f 2>/dev/null | head -1)
+          if [ -n "$APK_FILE" ]; then
+            cp "$APK_FILE" dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
+            echo "APK found: $APK_FILE"
           else
-            find build/ -name '*.apk' -exec cp {} dist/android/ \;
+            echo "WARNING: No APK found in build/apk/, searching build/..."
+            APK_FILE=$(find build/ -name '*.apk' -type f 2>/dev/null | head -1)
+            if [ -n "$APK_FILE" ]; then
+              cp "$APK_FILE" dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
+              echo "APK found: $APK_FILE"
+            else
+              echo "ERROR: No APK file found anywhere in build/"
+              exit 1
+            fi
           fi
           ls -la dist/android/
-          echo "APK files found:"
-          find dist/android/ -name '*.apk' || echo "No APK files found!"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
@@ -277,15 +286,17 @@ jobs:
         with:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.26.0
+            ## eDonish Auto v3.27.0
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.26.0:
-            - Исправлено зависание приложения — логи теперь обновляются с debounce (200мс)
-            - Сохранение журнала (Ctrl+S) больше не блокирует UI
-            - Улучшена стабильность сборки Android APK
-            - Общее улучшение производительности UI
+            ### Что нового в v3.27.0:
+            - Исправлена ошибка GitHub Actions — Android APK теперь собирается корректно
+            - Убран флаг --include (не поддерживается flet build apk)
+            - Добавлена настройка Android SDK в CI/CD
+            - Исправлено зависание приложения — прогресс теперь обновляется с debounce
+            - Ограничено количество одновременных page.update() для плавности UI
+            - Очистка SnackBar — больше не накапливаются в памяти
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик

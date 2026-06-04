@@ -2986,7 +2986,7 @@ class EdonishAutoApp:
         threading.Thread(target=run, daemon=True).start()
 
     def _on_progress(self, plan: GradePlan):
-        """Called from engine worker threads — update UI safely via Flet thread."""
+        """Called from engine worker threads — update UI with debouncing."""
         total = plan.total_tasks - plan.skipped
         if total > 0:
             done = plan.completed + plan.failed
@@ -3001,10 +3001,21 @@ class EdonishAutoApp:
             self.progress_pct.color = ft.Colors.ORANGE_600
             self.progress_label.value = "Все ячейки уже заполнены"
             self.stats_label.value = f"Пропущено: {plan.skipped} — снимите 'Только пустые' для перезаписи"
-        try:
-            self.page.run_thread(self._safe_update)
-        except Exception:
-            pass
+
+        # Debounce: only schedule a UI update if one is not already pending.
+        # This prevents hundreds of page.update() calls per second when
+        # multiple workers complete tasks rapidly.
+        if not self._progress_update_pending:
+            self._progress_update_pending = True
+            def _deferred_progress_update():
+                time.sleep(0.15)  # Wait 150ms before updating UI
+                try:
+                    self._throttled_safe_update()
+                except Exception:
+                    pass
+                finally:
+                    self._progress_update_pending = False
+            threading.Thread(target=_deferred_progress_update, daemon=True).start()
 
     def _on_log(self, message: str, level: str = "info"):
         """Called from engine worker threads — schedule log on Flet thread."""
@@ -3095,9 +3106,12 @@ class EdonishAutoApp:
         self.progress_label.value = "Удаление завершено"
         self.page.run_thread(self._safe_update)
 
-    # Debounce timer for log UI updates to prevent UI freeze
-    _log_update_timer = None
+    # Debounce timers to prevent UI freeze
     _log_update_pending = False
+    _progress_update_pending = False
+    _last_safe_update_time = 0
+    _safe_update_min_interval = 0.15  # min 150ms between page.update() calls
+    _snackbar_ref = None  # track current snackbar to prevent accumulation
 
     def _log_message(self, message: str, level: str = "info"):
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -3109,16 +3123,16 @@ class EdonishAutoApp:
             self._logs_lines = self._logs_lines[-1000:]
 
         # Debounce UI updates: only update the logs TextField at most
-        # once every 200ms. This prevents UI freeze when the engine
+        # once every 250ms. This prevents UI freeze when the engine
         # produces hundreds of log messages per second.
         if not self._log_update_pending:
             self._log_update_pending = True
             def _deferred_update():
-                time.sleep(0.2)
+                time.sleep(0.25)
                 try:
                     if hasattr(self, 'logs_text_field') and self.logs_text_field:
                         self.logs_text_field.value = "\n".join(self._logs_lines)
-                    self.page.run_thread(self._safe_update)
+                    self._throttled_safe_update()
                 except Exception:
                     pass
                 finally:
@@ -3149,11 +3163,32 @@ class EdonishAutoApp:
 
     def _safe_update(self):
         """Thread-safe page update helper — safe to call from any thread.
-        Uses a small debounce to prevent UI freeze from too frequent updates."""
-        try:
-            self.page.update()
-        except Exception:
-            pass
+        Uses throttling to prevent UI freeze from too frequent updates."""
+        self._throttled_safe_update()
+
+    def _throttled_safe_update(self):
+        """Throttled page.update() — enforces minimum interval between calls.
+        This prevents UI freeze when multiple threads all try to update
+        the page simultaneously."""
+        now = time.monotonic()
+        elapsed = now - self._last_safe_update_time
+        if elapsed < self._safe_update_min_interval:
+            # Too soon — schedule a delayed update instead
+            wait = self._safe_update_min_interval - elapsed
+            def _delayed():
+                time.sleep(wait)
+                try:
+                    self.page.update()
+                    self._last_safe_update_time = time.monotonic()
+                except Exception:
+                    pass
+            threading.Thread(target=_delayed, daemon=True).start()
+        else:
+            try:
+                self.page.update()
+                self._last_safe_update_time = time.monotonic()
+            except Exception:
+                pass
 
     def _on_save_journal(self):
         """Save all modified grades in the journal (Ctrl+S)."""
@@ -3204,15 +3239,28 @@ class EdonishAutoApp:
 
     def _show_snackbar(self, message: str):
         try:
+            # Remove previous snackbar to prevent overlay accumulation
+            if self._snackbar_ref is not None:
+                try:
+                    if self._snackbar_ref in self.page.overlay:
+                        self._snackbar_ref.open = False
+                        self.page.overlay.remove(self._snackbar_ref)
+                except Exception:
+                    pass
+
             snack = SnackBar(content=Text(message, size=15), open=True)
+            self._snackbar_ref = snack
             self.page.overlay.append(snack)
             self.page.update()
-            # Clean up old snackbars after a delay to avoid overlay accumulation
+            # Auto-remove snackbar after 3 seconds
             def cleanup():
                 time.sleep(3)
                 try:
                     if snack in self.page.overlay:
+                        snack.open = False
                         self.page.overlay.remove(snack)
+                        if self._snackbar_ref is snack:
+                            self._snackbar_ref = None
                         self.page.update()
                 except Exception:
                     pass

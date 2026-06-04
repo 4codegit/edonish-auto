@@ -1,6 +1,5 @@
 ---
 Task ID: 1
-<<<<<<< HEAD
 Agent: Main
 Task: Fix grade logic, auto-detect quarter, add signature feature, rebuild release
 
@@ -24,24 +23,29 @@ Stage Summary:
 - Quarter: auto-detected based on current date
 - Signature: new feature to add comments/signatures to students
 - CI pipeline running (#26843408474)
-=======
-Agent: Main Agent
-Task: Fix edonish-auto GUI crash (flet-desktop not bundled) and release v3.0.1
+
+---
+Task ID: 2
+Agent: Main
+Task: v3.25.0 - Copyable logs, role selector, fix force-quit, Android APK
 
 Work Log:
-- Read main.py, build.yml, spec files, config.py, package.sh to understand the codebase
-- Identified root cause: `flet-desktop` package was not being installed or bundled by PyInstaller
-- Fixed main.py: removed `MaterialState` (removed in Flet 0.25+), removed `MatplotlibChart` (unused), added `IconButton` to imports, fixed `border.only()` -> `Border.only()`
-- Fixed build.yml: added `pip install flet-desktop`, added `--hidden-import=flet_desktop` and `--collect-all flet_desktop` to all 3 build jobs (Windows, Linux, macOS)
-- Rewrote edonish-auto.spec for Flet (was still referencing CustomTkinter)
-- Updated requirements.txt to include `flet-desktop>=0.25.0`
-- Bumped version to 3.0.1 in config.py, package.sh, edonish-auto.spec.rpm
-- Resolved git merge conflict (remote had a parallel fix attempt)
-- Pushed to GitHub and created v3.0.1 tag to trigger CI/CD release build
+- Read main.py (3126 lines), api_client.py, config.py, grade_engine.py, build.yml
+- Replaced logs Column of Text with read-only TextField (copyable, selectable)
+- Added "Копировать" button that copies all logs to clipboard via page.set_clipboard()
+- Updated _log_message() to write to TextField instead of Column controls
+- Added _copy_logs() method
+- Added role selector Dropdown in AppBar with all known API roles (teacher, school_admin, director, etc.)
+- Added _on_role_change() that switches API role/prefix and reloads data
+- Fixed force quit and wait popup by ensuring _load_initial_data runs in background thread
+- Created _load_initial_data_thread() that runs all API calls off UI thread
+- Added Android APK build job (build-android) to build.yml using flet build apk
+- Updated release job to include build-android in needs list
+- Bumped version from 3.24.1 to 3.25.0 in: config.py, build.yml, installer.nsi, package.sh, debian.control, edonish-auto.spec, edonish-auto.spec.rpm
+- Committed, pushed to main, created v3.25.0 tag
+- CI/CD pipeline triggered successfully
 
 Stage Summary:
-- All code fixes committed and pushed to main branch
-- v3.0.1 tag created and pushed → CI/CD pipeline triggered
-- Key fix: `flet-desktop` is now installed and bundled in PyInstaller builds
-- Release will include: .exe (Windows), .rpm + .deb (Linux), .dmg (macOS)
->>>>>>> 01d93a4 (7e6b4625-eded-4853-92bd-47dc11ebf725)
+- v3.25.0 released with copyable logs, role selector, force-quit fix, Android build
+- 8 files changed, 258 insertions, 125 deletions
+- Pipeline running for Windows, Linux, macOS, Android builds
