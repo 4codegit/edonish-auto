@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.25.0
+  APP_VERSION: 3.26.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -230,15 +230,23 @@ jobs:
           flet build apk \
             --project edonish-auto \
             --description "Automated grade management for edonish.tj" \
-            --bundle-id tj.edonish.auto
+            --bundle-id tj.edonish.auto \
+            --include *.py config.py api_client.py grade_engine.py
 
       - name: Move APK to dist
         run: |
           mkdir -p dist/android
-          cp build/apk/edonish-auto.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk 2>/dev/null || \
-          cp build/apk/*.apk dist/android/ 2>/dev/null || \
-          find build/ -name '*.apk' -exec cp {} dist/android/ \;
+          # flet build apk outputs to build/apk/ directory
+          if [ -f build/apk/edonish-auto.apk ]; then
+            cp build/apk/edonish-auto.apk dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
+          elif [ -f build/apk/*.apk ]; then
+            cp build/apk/*.apk dist/android/
+          else
+            find build/ -name '*.apk' -exec cp {} dist/android/ \;
+          fi
           ls -la dist/android/
+          echo "APK files found:"
+          find dist/android/ -name '*.apk' || echo "No APK files found!"
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
@@ -269,15 +277,15 @@ jobs:
         with:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.25.0
+            ## eDonish Auto v3.26.0
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.25.0:
-            - Логи теперь копируются! Кнопка "Копировать" копирует все логи в буфер обмена
-            - Выбор роли в AppBar — можно переключаться между teacher, school_admin, director и другими
-            - Исправлено зависание приложения (force quit and wait) — все API вызовы теперь в фоновом потоке
-            - Добавлена сборка Android APK
+            ### Что нового в v3.26.0:
+            - Исправлено зависание приложения — логи теперь обновляются с debounce (200мс)
+            - Сохранение журнала (Ctrl+S) больше не блокирует UI
+            - Улучшена стабильность сборки Android APK
+            - Общее улучшение производительности UI
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик

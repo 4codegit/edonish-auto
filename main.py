@@ -3095,6 +3095,10 @@ class EdonishAutoApp:
         self.progress_label.value = "Удаление завершено"
         self.page.run_thread(self._safe_update)
 
+    # Debounce timer for log UI updates to prevent UI freeze
+    _log_update_timer = None
+    _log_update_pending = False
+
     def _log_message(self, message: str, level: str = "info"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         prefix = {"info": "INFO", "warning": "WARN", "error": "ERR!"}.get(level, "INFO")
@@ -3104,14 +3108,24 @@ class EdonishAutoApp:
         if len(self._logs_lines) > 1000:
             self._logs_lines = self._logs_lines[-1000:]
 
-        try:
-            if hasattr(self, 'logs_text_field') and self.logs_text_field:
-                self.logs_text_field.value = "\n".join(self._logs_lines)
-            self.page.update()
-        except Exception:
-            pass
+        # Debounce UI updates: only update the logs TextField at most
+        # once every 200ms. This prevents UI freeze when the engine
+        # produces hundreds of log messages per second.
+        if not self._log_update_pending:
+            self._log_update_pending = True
+            def _deferred_update():
+                time.sleep(0.2)
+                try:
+                    if hasattr(self, 'logs_text_field') and self.logs_text_field:
+                        self.logs_text_field.value = "\n".join(self._logs_lines)
+                    self.page.run_thread(self._safe_update)
+                except Exception:
+                    pass
+                finally:
+                    self._log_update_pending = False
+            threading.Thread(target=_deferred_update, daemon=True).start()
 
-        # Also log to Python logger
+        # Also log to Python logger immediately
         if level == "error":
             logger.error(message)
         elif level == "warning":
@@ -3177,11 +3191,16 @@ class EdonishAutoApp:
             self._show_snackbar("Нет изменений для сохранения")
             return
 
-        # Save all modified cells
-        self._show_snackbar(f"Сохранение {len(modified_cells)} оценок...")
-        for row, col, grade in modified_cells:
-            self._set_cell_grade(row, col, grade)
-            time.sleep(0.15)  # Small delay between saves to avoid API rate limiting
+        # Save all modified cells in a background thread to avoid UI freeze
+        cells_to_save = list(modified_cells)
+        self._show_snackbar(f"Сохранение {len(cells_to_save)} оценок...")
+
+        def do_save():
+            for row, col, grade in cells_to_save:
+                self._set_cell_grade(row, col, grade)
+                time.sleep(0.15)  # Small delay between saves to avoid API rate limiting
+
+        threading.Thread(target=do_save, daemon=True).start()
 
     def _show_snackbar(self, message: str):
         try:
