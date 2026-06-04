@@ -998,7 +998,6 @@ class EdonishAutoApp:
             read_only=True,
             expand=True,
             text_size=13,
-            font_family="Roboto Mono",
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.TRANSPARENT,
             cursor_color=ft.Colors.TRANSPARENT,
