@@ -49,3 +49,33 @@ Stage Summary:
 - v3.25.0 released with copyable logs, role selector, force-quit fix, Android build
 - 8 files changed, 258 insertions, 125 deletions
 - Pipeline running for Windows, Linux, macOS, Android builds
+
+---
+Task ID: 3
+Agent: Main
+Task: v3.29.0 - Fix GitHub Actions CI/CD errors
+
+Work Log:
+- Analyzed build.yml, edonish-auto.spec.rpm, config.py, installer.nsi, package.sh, debian.control, edonish-auto.spec, requirements.txt
+- Found 4 critical errors causing GitHub Actions to fail:
+  1. Windows `--add-data` separator was `:` instead of `;` (PyInstaller requires `;` on Windows)
+  2. RPM spec file had version 3.25.0 instead of current version → Linux RPM build fails
+  3. Release job only ran on tags (`if: startsWith(github.ref, 'refs/tags/v')`) → no release on main push
+  4. requirements.txt had `flet>=0.25.0` instead of `flet>=0.85.0`
+- Fixed all 4 errors in build.yml:
+  - Changed Windows `--add-data` from `certifiDir:certifi` to `certifiDir;certifi`
+  - Release now also triggers on `workflow_dispatch`
+  - Added auto-tag creation step for workflow_dispatch releases
+  - Added `tag_name` parameter to action-gh-release for reliability
+- Updated RPM spec version from 3.25.0 to 3.29.0
+- Updated requirements.txt with flet>=0.85.0, flet-desktop>=0.85.0, certifi>=2023.7.22
+- Synchronized version 3.29.0 across all 8 files
+- Committed, pushed to main, created v3.29.0 tag
+- CI/CD pipeline triggered successfully
+
+Stage Summary:
+- v3.29.0 pushed with all CI/CD fixes
+- Windows build should now succeed (semicolon separator)
+- Linux RPM build should now succeed (matching version)
+- Release will now be created on both tags and workflow_dispatch
+- All version strings synchronized to 3.29.0

@@ -37,12 +37,38 @@ except Exception:
 
 # Fix Flet View path for PyInstaller bundles.
 # When running from a PyInstaller/flet pack bundle, the Flutter engine
-# is included in _MEIPASS/flet. Set FLET_VIEW_PATH so flet_desktop
-# finds it without trying to download at runtime.
+# is bundled in _MEIPASS. We need to find the directory containing
+# the Flet View executable so flet_desktop doesn't try to download it.
 if getattr(sys, 'frozen', False):
-    _flet_view_dir = os.path.join(sys._MEIPASS, 'flet')
-    if os.path.isdir(_flet_view_dir):
-        os.environ['FLET_VIEW_PATH'] = _flet_view_dir
+    _meipass = sys._MEIPASS
+    _flet_view_candidates = []
+
+    # Check _MEIPASS/flet_view/ first (our CI bundles Flet View here)
+    _flet_view_candidates.append(os.path.join(_meipass, 'flet_view'))
+
+    # Check _MEIPASS/flet/ (flet pack may put it here)
+    _flet_view_candidates.append(os.path.join(_meipass, 'flet'))
+
+    # Search subdirectories (e.g. _MEIPASS/flet/flet-desktop-light-0.85.2/)
+    for _parent in list(_flet_view_candidates):
+        if os.path.isdir(_parent):
+            for _child in os.listdir(_parent):
+                _child_path = os.path.join(_parent, _child)
+                if os.path.isdir(_child_path) and (
+                    _child.startswith('flet-') or _child == 'flet'
+                ):
+                    _flet_view_candidates.append(_child_path)
+
+    # Set FLET_VIEW_PATH only if the Flet View executable is actually found
+    _flet_exe_names = ['flet', 'flet.exe', 'Flet.app']
+    for _cand in _flet_view_candidates:
+        if os.path.isdir(_cand):
+            for _exe in _flet_exe_names:
+                if os.path.exists(os.path.join(_cand, _exe)):
+                    os.environ['FLET_VIEW_PATH'] = _cand
+                    break
+            if 'FLET_VIEW_PATH' in os.environ:
+                break
 
 import json
 import math

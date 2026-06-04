@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.29.0
+  APP_VERSION: 3.30.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -43,21 +43,56 @@ jobs:
           pip install flet>=0.85.0 flet-desktop>=0.85.0 requests pyinstaller certifi
         shell: pwsh
 
+      - name: Pre-cache Flet View (Flutter engine)
+        shell: pwsh
+        run: |
+          # Trigger Flet View download by starting a minimal app with virtual display
+          python -c "
+          import flet as ft
+          import sys, os, threading
+          def main(page):
+              page.window.destroy()
+          try:
+              t = threading.Thread(target=lambda: ft.app(target=main), daemon=True)
+              t.start()
+              t.join(timeout=15)
+          except: pass
+          " 2>$null || true
+          # Find Flet View cache directory
+          $fletViewDir = $null
+          $cacheBase = "$env:LOCALAPPDATA\flet"
+          if (Test-Path $cacheBase) {
+              $fletViewDir = Get-ChildItem $cacheBase -Directory -Recurse -Filter "flet-desktop*" |
+                  Sort-Object FullName -Descending | Select-Object -First 1
+          }
+          if ($fletViewDir) {
+              Write-Host "Flet View found at: $($fletViewDir.FullName)"
+              echo "FLET_VIEW_DIR=$($fletViewDir.FullName)" >> $env:GITHUB_ENV
+          } else {
+              Write-Host "WARNING: Flet View not found in cache"
+          }
+
       - name: Build GUI executable with flet pack
+        shell: pwsh
         run: |
           $certifiDir = python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))"
-          $upxDir = (Get-Command upx).Source | Split-Path
-          flet pack main.py --name edonish-auto `
-            --hidden-import requests `
-            --hidden-import urllib3 `
-            --hidden-import urllib3.util `
-            --hidden-import certifi `
-            --hidden-import charset_normalizer `
-            --hidden-import idna `
-            --hidden-import darkdetect `
-            --hidden-import packaging `
-            --add-data "${certifiDir};certifi"
-        shell: pwsh
+          $packArgs = @(
+              "main.py", "--name", "edonish-auto",
+              "--hidden-import", "requests",
+              "--hidden-import", "urllib3",
+              "--hidden-import", "urllib3.util",
+              "--hidden-import", "certifi",
+              "--hidden-import", "charset_normalizer",
+              "--hidden-import", "idna",
+              "--hidden-import", "darkdetect",
+              "--hidden-import", "packaging",
+              "--add-data", "${certifiDir};certifi"
+          )
+          if ($env:FLET_VIEW_DIR -and (Test-Path $env:FLET_VIEW_DIR)) {
+              Write-Host "Bundling Flet View from: $env:FLET_VIEW_DIR"
+              $packArgs += @("--add-data", "$env:FLET_VIEW_DIR;flet_view")
+          }
+          flet pack @packArgs
 
       - name: Prepare dist directory
         run: |
@@ -107,23 +142,52 @@ jobs:
             libgtk-3-0 libgdk-pixbuf2.0-0 libgl1 \
             libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
             libatspi2.0-0 rpm dpkg-dev \
-            libgmp-dev libmpfr-dev libcairo2-dev
+            libgmp-dev libmpfr-dev libcairo2-dev \
+            xvfb
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install flet>=0.85.0 flet-desktop>=0.85.0 requests pyinstaller certifi
 
+      - name: Pre-cache Flet View (Flutter engine)
+        run: |
+          # Trigger Flet View download by starting a minimal Flet app with virtual display
+          timeout 30 xvfb-run python -c "
+          import flet as ft
+          import sys, threading
+          def main(page):
+              page.window_destroy()
+          try:
+              t = threading.Thread(target=lambda: ft.app(target=main), daemon=True)
+              t.start()
+              t.join(timeout=15)
+          except: pass
+          " 2>/dev/null || true
+          # Find Flet View cache directory
+          FLET_VIEW_DIR=$(find ~/.flet ~/.cache/flet -maxdepth 3 -type d -name 'flet-desktop*' 2>/dev/null | sort -r | head -1)
+          if [ -n "$FLET_VIEW_DIR" ] && [ -d "$FLET_VIEW_DIR" ]; then
+              echo "Flet View found at: $FLET_VIEW_DIR"
+              echo "FLET_VIEW_DIR=$FLET_VIEW_DIR" >> $GITHUB_ENV
+          else
+              echo "WARNING: Flet View not found in cache"
+          fi
+
       - name: Build GUI binary with flet pack
         run: |
           CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
-          flet pack main.py --name edonish-auto \
+          PACK_ARGS="--name edonish-auto \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --add-data "${CERTIFI_DIR}:certifi"
+            --add-data ${CERTIFI_DIR}:certifi"
+          if [ -n "$FLET_VIEW_DIR" ] && [ -d "$FLET_VIEW_DIR" ]; then
+              echo "Bundling Flet View from: $FLET_VIEW_DIR"
+              PACK_ARGS="$PACK_ARGS --add-data ${FLET_VIEW_DIR}:flet_view"
+          fi
+          eval flet pack main.py $PACK_ARGS
 
       - name: Move binary to dist/linux and report size
         run: |
@@ -165,17 +229,45 @@ jobs:
           pip install --upgrade pip
           pip install flet>=0.85.0 flet-desktop>=0.85.0 requests pyinstaller certifi
 
+      - name: Pre-cache Flet View (Flutter engine)
+        run: |
+          # Trigger Flet View download by starting a minimal Flet app
+          timeout 30 python -c "
+          import flet as ft
+          import sys, threading
+          def main(page):
+              page.window_destroy()
+          try:
+              t = threading.Thread(target=lambda: ft.app(target=main), daemon=True)
+              t.start()
+              t.join(timeout=15)
+          except: pass
+          " 2>/dev/null || true
+          # Find Flet View cache directory
+          FLET_VIEW_DIR=$(find ~/Library/Caches/flet ~/.flet -maxdepth 3 -type d -name 'flet-*' 2>/dev/null | sort -r | head -1)
+          if [ -n "$FLET_VIEW_DIR" ] && [ -d "$FLET_VIEW_DIR" ]; then
+              echo "Flet View found at: $FLET_VIEW_DIR"
+              echo "FLET_VIEW_DIR=$FLET_VIEW_DIR" >> $GITHUB_ENV
+          else
+              echo "WARNING: Flet View not found in cache"
+          fi
+
       - name: Build macOS .app bundle with flet pack
         run: |
           CERTIFI_DIR=$(python -c "import certifi; import os; print(os.path.dirname(certifi.__file__))")
-          flet pack main.py --name edonish-auto \
+          PACK_ARGS="--name edonish-auto \
             --bundle-id tj.edonish.auto \
             --hidden-import requests \
             --hidden-import urllib3 \
             --hidden-import certifi \
             --hidden-import darkdetect \
             --hidden-import packaging \
-            --add-data "${CERTIFI_DIR}:certifi"
+            --add-data ${CERTIFI_DIR}:certifi"
+          if [ -n "$FLET_VIEW_DIR" ] && [ -d "$FLET_VIEW_DIR" ]; then
+              echo "Bundling Flet View from: $FLET_VIEW_DIR"
+              PACK_ARGS="$PACK_ARGS --add-data ${FLET_VIEW_DIR}:flet_view"
+          fi
+          eval flet pack main.py $PACK_ARGS
 
       - name: Free disk space and package macOS app
         run: |
@@ -313,24 +405,21 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.29.0
+            ## eDonish Auto v3.30.0
 
             Автоматизация электронного журнала edonish.tj
+
+            ### Что нового в v3.30.0:
+            - Исправлено: Flet View (Flutter движок) теперь включён в бинарник
+            - Приложение будет работать на чистых машинах без кэша Flet
+            - Улучшено определение FLET_VIEW_PATH в PyInstaller бандле
+            - Добавлен pre-cache Flet View в CI/CD для всех платформ
 
             ### Что нового в v3.29.0:
             - Исправлена критическая ошибка GitHub Actions — Windows билд не создавался
             - Исправлен разделитель --add-data для Windows (должен быть ; а не :)
-            - Исправлена версия в RPM spec файле (3.25.0 → 3.29.0)
+            - Исправлена версия в RPM spec файле
             - Release теперь создаётся и при workflow_dispatch
-            - Обновлены версии зависимостей в requirements.txt
-
-            ### Что нового в v3.28.0:
-            - Android билд не блокирует создание релиза (continue-on-error)
-            - Исправлено зависание приложения (force quit popup)
-            - Все page.update() вызовы теперь потокобезопасны
-            - Исправлена debounce логика для прогресса и логов
-            - Добавлено принятие Android SDK лицензий в CI/CD
-            - Флаг --project заменён на --project-name для flet build apk
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
