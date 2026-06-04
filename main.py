@@ -1083,11 +1083,12 @@ class EdonishAutoApp:
         def do_login():
             try:
                 user_info = self.api.login(login_id, password)
-                self.page.run_thread(lambda: self._on_login_success(user_info))
+                # Call directly from background thread — page.update() is thread-safe in Flet
+                self._on_login_success(user_info)
             except AuthenticationError as e:
-                self.page.run_thread(lambda: self._on_login_error(str(e)))
+                self._on_login_error(str(e))
             except Exception as e:
-                self.page.run_thread(lambda: self._on_login_error(f"Ошибка: {e}"))
+                self._on_login_error(f"Ошибка: {e}")
 
         threading.Thread(target=do_login, daemon=True).start()
 
@@ -1179,8 +1180,8 @@ class EdonishAutoApp:
                         ]
                         break
 
-            # Update UI from background thread via run_thread
-            self.page.run_thread(self._update_dropdowns)
+            # Update UI from background thread — page.update() is thread-safe
+            self._update_dropdowns()
 
         except Exception as e:
             self._log_message(f"Ошибка загрузки: {e}", "error")
@@ -1253,7 +1254,7 @@ class EdonishAutoApp:
         msg = f"Загружено: {len(self.groups_data)} классов, {len(self.teacher_subjects)} предметов"
         self._log_message(msg)
         try:
-            self.page.run_thread(self._safe_update)
+            self._safe_update()
         except Exception:
             pass
 
@@ -1401,7 +1402,7 @@ class EdonishAutoApp:
         self.stop_btn.disabled = True
         self.analyze_btn.disabled = False
         self.progress_label.value = "Подписи добавлены"
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     # ════════════════════════════════════════════════════════════════
     #  QUARTER MARKS
@@ -1503,7 +1504,7 @@ class EdonishAutoApp:
         if self._journal_loaded and self._current_journal_params:
             self._log_message("Обновление журнала...")
             self._reload_journal()
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     def _on_delete_quarter_marks(self):
         """Delete ONLY quarter marks for selected groups/subjects/quarters."""
@@ -1588,7 +1589,7 @@ class EdonishAutoApp:
         if self._journal_loaded and self._current_journal_params:
             self._log_message("Обновление журнала...")
             self._reload_journal()
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     def _on_set_quarter_mark(self, row: int):
         """Set quarter mark for a single student as ceil(average of their subject marks).
@@ -1787,7 +1788,7 @@ class EdonishAutoApp:
             except Exception as e:
                 self._log_message(f"Ошибка анализа: {e}", "error")
                 self.analyze_btn.disabled = False
-                self.page.run_thread(self._safe_update)
+                self._safe_update()
 
         threading.Thread(target=analyze, daemon=True).start()
 
@@ -1845,7 +1846,7 @@ class EdonishAutoApp:
             self.progress_pct.color = ft.Colors.BLUE_600
             self.stats_label.value = f"Будет добавлено: {to_execute}  |  Пропущено: {plan.skipped}"
 
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     def _on_start(self):
         if not self._current_plan:
@@ -1921,7 +1922,7 @@ class EdonishAutoApp:
             self.progress_pct.value = f"{pct * 100:.0f}%"
             self.progress_bar.value = pct
             self.stats_label.value = f"Успешно: {plan.completed}  |  Ошибки: {plan.failed}  |  Пропущено: {plan.skipped}"
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     # ════════════════════════════════════════════════════════════════
     #  INTERACTIVE JOURNAL GRID
@@ -2324,7 +2325,7 @@ class EdonishAutoApp:
         self.page.on_keyboard_event = self._on_dashboard_keyboard
 
         try:
-            self.page.run_thread(self._safe_update)
+            self._safe_update()
         except Exception:
             pass
 
@@ -2466,7 +2467,7 @@ class EdonishAutoApp:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка: {ex}", "error")
             finally:
-                self.page.run_thread(self._safe_update)
+                self._safe_update()
 
         threading.Thread(target=do_set, daemon=True).start()
 
@@ -2504,7 +2505,7 @@ class EdonishAutoApp:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка удаления: {ex}", "error")
             finally:
-                self.page.run_thread(self._safe_update)
+                self._safe_update()
 
         threading.Thread(target=do_delete, daemon=True).start()
 
@@ -2611,7 +2612,7 @@ class EdonishAutoApp:
                 time.sleep(0.15)
 
             self._log_message(f"🎲 Рандом: ✅ {completed} оценок поставлено, ❌ {failed} ошибок (строка {row + 1})")
-            self.page.run_thread(self._safe_update)
+            self._safe_update()
 
         threading.Thread(target=do_random, daemon=True).start()
 
@@ -2667,7 +2668,7 @@ class EdonishAutoApp:
             self.journal_fill_topics_btn.disabled = False
             # Reload journal to show updated topics
             self._reload_journal()
-            self.page.run_thread(self._safe_update)
+            self._safe_update()
 
         threading.Thread(target=do_fill, daemon=True).start()
 
@@ -2739,7 +2740,7 @@ class EdonishAutoApp:
             self._log_message(f"Удаление завершено: {deleted} удалено, {failed} ошибок")
             self.journal_clear_btn.disabled = False
             try:
-                self.page.run_thread(self._safe_update)
+                self._safe_update()
             except Exception:
                 pass
             # Reload journal to reflect changes
@@ -2872,7 +2873,7 @@ class EdonishAutoApp:
                 # Reload journal to reflect changes
                 self._reload_journal()
                 try:
-                    self.page.run_thread(self._safe_update)
+                    self._safe_update()
                 except Exception:
                     pass
 
@@ -2979,7 +2980,7 @@ class EdonishAutoApp:
                 # Reload journal to reflect changes
                 self._reload_journal()
                 try:
-                    self.page.run_thread(self._safe_update)
+                    self._safe_update()
                 except Exception:
                     pass
 
@@ -3008,7 +3009,7 @@ class EdonishAutoApp:
         if not self._progress_update_pending:
             self._progress_update_pending = True
             def _deferred_progress_update():
-                time.sleep(0.15)  # Wait 150ms before updating UI
+                time.sleep(0.25)  # Wait 250ms before updating UI
                 try:
                     self._throttled_safe_update()
                 except Exception:
@@ -3019,7 +3020,7 @@ class EdonishAutoApp:
 
     def _on_log(self, message: str, level: str = "info"):
         """Called from engine worker threads — schedule log on Flet thread."""
-        self.page.run_thread(lambda: self._log_message(message, level))
+        self._log_message(message, level)
 
     # ════════════════════════════════════════════════════════════════
     #  DELETE GRADES
@@ -3104,13 +3105,13 @@ class EdonishAutoApp:
         self.signature_btn.disabled = False
         self.progress_pct.color = ft.Colors.BLUE_600
         self.progress_label.value = "Удаление завершено"
-        self.page.run_thread(self._safe_update)
+        self._safe_update()
 
     # Debounce timers to prevent UI freeze
     _log_update_pending = False
     _progress_update_pending = False
     _last_safe_update_time = 0
-    _safe_update_min_interval = 0.15  # min 150ms between page.update() calls
+    _safe_update_min_interval = 0.25  # min 250ms between page.update() calls (increased from 150ms)
     _snackbar_ref = None  # track current snackbar to prevent accumulation
 
     def _log_message(self, message: str, level: str = "info"):
@@ -3123,12 +3124,12 @@ class EdonishAutoApp:
             self._logs_lines = self._logs_lines[-1000:]
 
         # Debounce UI updates: only update the logs TextField at most
-        # once every 250ms. This prevents UI freeze when the engine
+        # once every 400ms. This prevents UI freeze when the engine
         # produces hundreds of log messages per second.
         if not self._log_update_pending:
             self._log_update_pending = True
             def _deferred_update():
-                time.sleep(0.25)
+                time.sleep(0.4)
                 try:
                     if hasattr(self, 'logs_text_field') and self.logs_text_field:
                         self.logs_text_field.value = "\n".join(self._logs_lines)

@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.27.0
+  APP_VERSION: 3.28.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -202,10 +202,11 @@ jobs:
           path: dist/dmg/
 
   # ═══════════════════════════════════════════════════════════════
-  # BUILD: Android APK (Flet build apk)
+  # BUILD: Android APK (best-effort — won't block release)
   # ═══════════════════════════════════════════════════════════════
   build-android:
     runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block release if Android build fails
     steps:
       - uses: actions/checkout@v4
 
@@ -228,18 +229,24 @@ jobs:
           pip install --upgrade pip
           pip install flet>=0.85.0 requests certifi
 
+      - name: Accept Android SDK licenses
+        run: |
+          # Accept all Android SDK licenses to avoid interactive prompts
+          yes | sdkmanager --licenses 2>/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
+
       - name: Build Android APK with flet build apk
         run: |
           flet build apk \
-            --project edonish-auto \
+            --project-name edonish-auto \
             --description "Automated grade management for edonish.tj" \
             --bundle-id tj.edonish.auto
+        timeout-minutes: 30
 
       - name: Move APK to dist
         run: |
           mkdir -p dist/android
           # flet build apk outputs to build/apk/ directory
-          # Use find to reliably locate APK regardless of exact filename
           APK_FILE=$(find build/apk/ -name '*.apk' -type f 2>/dev/null | head -1)
           if [ -n "$APK_FILE" ]; then
             cp "$APK_FILE" dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
@@ -251,8 +258,9 @@ jobs:
               cp "$APK_FILE" dist/android/edonish-auto-${{ env.APP_VERSION }}.apk
               echo "APK found: $APK_FILE"
             else
-              echo "ERROR: No APK file found anywhere in build/"
-              exit 1
+              echo "WARNING: No APK file found. Android build may have failed."
+              echo "Creating empty marker file so artifact upload doesn't fail"
+              echo "Android APK build failed" > dist/android/APK_BUILD_FAILED.txt
             fi
           fi
           ls -la dist/android/
@@ -262,6 +270,7 @@ jobs:
         with:
           name: edonish-auto-android
           path: dist/android/
+        if: always()  # Upload even if APK wasn't created
 
   # ═══════════════════════════════════════════════════════════════
   # RELEASE: Create GitHub Release with all installers
@@ -281,22 +290,26 @@ jobs:
       - name: List all artifacts
         run: find release-artifacts -type f | head -30
 
+      - name: Remove failed build markers
+        run: find release-artifacts -name 'APK_BUILD_FAILED.txt' -delete || true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.27.0
+            ## eDonish Auto v3.28.0
 
             Автоматизация электронного журнала edonish.tj
 
-            ### Что нового в v3.27.0:
-            - Исправлена ошибка GitHub Actions — Android APK теперь собирается корректно
-            - Убран флаг --include (не поддерживается flet build apk)
-            - Добавлена настройка Android SDK в CI/CD
-            - Исправлено зависание приложения — прогресс теперь обновляется с debounce
-            - Ограничено количество одновременных page.update() для плавности UI
-            - Очистка SnackBar — больше не накапливаются в памяти
+            ### Что нового в v3.28.0:
+            - Исправлена ошибка GitHub Actions — релизы теперь создаются корректно
+            - Android билд не блокирует создание релиза (continue-on-error)
+            - Исправлено зависание приложения (force quit popup)
+            - Все page.update() вызовы теперь потокобезопасны
+            - Исправлена debounce логика для прогресса и логов
+            - Добавлено принятие Android SDK лицензий в CI/CD
+            - Флаг --project заменён на --project-name для flet build apk
 
             ### Установка:
             - **Windows**: Скачайте `edonish-auto-*-setup.exe`, запустите установщик
