@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.28.0
+  APP_VERSION: 3.29.0
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -56,7 +56,7 @@ jobs:
             --hidden-import idna `
             --hidden-import darkdetect `
             --hidden-import packaging `
-            --add-data "${certifiDir}:certifi"
+            --add-data "${certifiDir};certifi"
         shell: pwsh
 
       - name: Prepare dist directory
@@ -278,10 +278,24 @@ jobs:
   release:
     needs: [build-windows, build-linux, build-macos, build-android]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure tag exists for release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          TAG="v${{ env.APP_VERSION }}"
+          if ! git tag -l "$TAG" | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+          echo "Using tag: $TAG"
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -296,14 +310,21 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.APP_VERSION }}
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.28.0
+            ## eDonish Auto v3.29.0
 
             Автоматизация электронного журнала edonish.tj
 
+            ### Что нового в v3.29.0:
+            - Исправлена критическая ошибка GitHub Actions — Windows билд не создавался
+            - Исправлен разделитель --add-data для Windows (должен быть ; а не :)
+            - Исправлена версия в RPM spec файле (3.25.0 → 3.29.0)
+            - Release теперь создаётся и при workflow_dispatch
+            - Обновлены версии зависимостей в requirements.txt
+
             ### Что нового в v3.28.0:
-            - Исправлена ошибка GitHub Actions — релизы теперь создаются корректно
             - Android билд не блокирует создание релиза (continue-on-error)
             - Исправлено зависание приложения (force quit popup)
             - Все page.update() вызовы теперь потокобезопасны
