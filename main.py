@@ -105,7 +105,7 @@ from config import (
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
     SESSION_FILE, API_PREFIXES,
 )
-from api_client import EdonishAPI, AuthenticationError
+from api_client import EdonishAPI, AuthenticationError, MarkDeleteConflict
 from grade_engine import GradeEngine, GradePlan
 
 logging.basicConfig(
@@ -2753,16 +2753,29 @@ class EdonishAutoApp:
         def run():
             deleted = 0
             failed = 0
+            conflicts = 0
             for mark_id in marks_to_delete:
                 try:
                     self.api.delete_mark(mark_id=mark_id)
                     deleted += 1
+                except MarkDeleteConflict as e:
+                    failed += 1
+                    conflicts += 1
+                    if conflicts <= 3:
+                        self._log_message(f"Конфликт удаления: {e}", "warning")
+                    elif conflicts == 4:
+                        self._log_message("Есть ещё оценки с 409 Conflict — скрываю повторяющиеся сообщения до итога", "warning")
                 except Exception as e:
                     failed += 1
                     self._log_message(f"Ошибка удаления: {e}", "error")
                 time.sleep(0.1)
 
-            self._log_message(f"Удаление завершено: {deleted} удалено, {failed} ошибок")
+            if conflicts:
+                self._log_message(
+                    f"Удаление завершено: {deleted} удалено, {conflicts} конфликтов API, {failed - conflicts} ошибок"
+                )
+            else:
+                self._log_message(f"Удаление завершено: {deleted} удалено, {failed} ошибок")
             self.journal_clear_btn.disabled = False
             try:
                 self._safe_update()

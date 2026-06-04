@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 from config import MIN_GRADE, MAX_GRADE, DEFAULT_WORKERS, DEFAULT_BATCH_SIZE
+from api_client import MarkDeleteConflict
 
 logger = logging.getLogger("edonish_auto")
 
@@ -785,6 +786,7 @@ class GradeEngine:
         # Execute deletions
         completed = 0
         failed = 0
+        conflicts = 0
 
         for task in plan.tasks:
             if self._stop_event.is_set():
@@ -812,6 +814,16 @@ class GradeEngine:
                     task.status = "error"
                     failed += 1
                     plan.failed = failed
+            except MarkDeleteConflict as e:
+                task.status = "error"
+                task.error = str(e)
+                failed += 1
+                conflicts += 1
+                plan.failed = failed
+                if conflicts <= 3:
+                    self._log(f"  ⚠️ {task.student_name}: {e}", "warning")
+                elif conflicts == 4:
+                    self._log("  ⚠️ Есть ещё оценки с 409 Conflict — скрываю повторяющиеся сообщения до итога", "warning")
             except Exception as e:
                 task.status = "error"
                 task.error = str(e)
@@ -823,7 +835,12 @@ class GradeEngine:
             time.sleep(task_delay)
 
         self._running = False
-        self._log(f"🏁 Удаление: ✅ {completed} удалено, ❌ {failed} ошибок")
+        if conflicts:
+            self._log(
+                f"🏁 Удаление: ✅ {completed} удалено, ⚠️ {conflicts} конфликтов API, ❌ {failed - conflicts} ошибок"
+            )
+        else:
+            self._log(f"🏁 Удаление: ✅ {completed} удалено, ❌ {failed} ошибок")
         return plan
 
     def execute_delete_quarter_marks(

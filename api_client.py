@@ -269,22 +269,46 @@ class EdonishAPI:
         )
 
     def delete_mark(self, mark_id: str) -> Optional[Dict]:
-        """Delete a mark by its ID."""
-        # Try with JSON body first (some API versions require it)
-        try:
-            return self._request(
-                "POST",
-                self._url(JOURNAL_MARK_DELETE),
-                params={"school_id": self.school_id},
-                json={"mark_id": mark_id},
-            )
-        except Exception:
-            # Fallback to query params
-            return self._request(
-                "POST",
-                self._url(JOURNAL_MARK_DELETE),
-                params={"mark_id": mark_id, "school_id": self.school_id},
-            )
+        """Delete a regular journal mark by its ID."""
+        mid = str(mark_id) if mark_id else ""
+        attempts = [
+            ("POST", {"mark_id": mid}, {"school_id": self.school_id}, "POST body mark_id"),
+            ("DELETE", {"mark_id": mid}, {"school_id": self.school_id}, "DELETE body mark_id"),
+            ("POST", {"id": mid}, {"school_id": self.school_id}, "POST body id"),
+            ("DELETE", {"id": mid}, {"school_id": self.school_id}, "DELETE body id"),
+            ("POST", None, {"mark_id": mid, "school_id": self.school_id}, "POST query mark_id"),
+            ("DELETE", None, {"mark_id": mid, "school_id": self.school_id}, "DELETE query mark_id"),
+        ]
+        first_conflict = None
+        last_error = None
+
+        for method, json_body, params, desc in attempts:
+            try:
+                kwargs = {"params": params}
+                if json_body is not None:
+                    kwargs["json"] = json_body
+                result = self._request(method, self._url(JOURNAL_MARK_DELETE), **kwargs)
+                logger.info(f"delete_mark: succeeded via {desc}")
+                return result
+            except requests.exceptions.HTTPError as e:
+                last_error = e
+                status_code = e.response.status_code if e.response is not None else None
+                if status_code == 409:
+                    first_conflict = first_conflict or e
+                    logger.info(f"delete_mark: conflict via {desc} for mark_id={mid}")
+                    continue
+                logger.info(f"delete_mark: attempt {desc} failed: {e}")
+            except Exception as e:
+                last_error = e
+                logger.info(f"delete_mark: attempt {desc} failed: {e}")
+
+        if first_conflict is not None:
+            raise MarkDeleteConflict(
+                f"Оценку нельзя удалить через API сейчас (409 Conflict, id={mid})"
+            ) from first_conflict
+        if last_error is not None:
+            raise last_error
+        return None
 
     def delete_quarter_mark(
         self,
@@ -489,4 +513,9 @@ class AuthenticationError(Exception):
 
 class APIError(Exception):
     """Raised when an API call fails."""
+    pass
+
+
+class MarkDeleteConflict(APIError):
+    """Raised when the API refuses to delete a mark with HTTP 409."""
     pass

@@ -8,7 +8,7 @@ on:
 
 env:
   APP_NAME: edonish-auto
-  APP_VERSION: 3.30.2
+  APP_VERSION: 3.30.3
   # Python 3.11 for Windows (avoids api-ms-win-core-path-l1-1-0.dll error)
   PYTHON_VERSION_WIN: '3.11'
   PYTHON_VERSION: '3.12'
@@ -405,9 +405,14 @@ jobs:
           tag_name: v${{ env.APP_VERSION }}
           name: eDonish Auto v${{ env.APP_VERSION }}
           body: |
-            ## eDonish Auto v3.30.2
+            ## eDonish Auto v3.30.3
 
             Автоматизация электронного журнала edonish.tj
+
+            ### Что нового в v3.30.3:
+            - Исправлена обработка 409 Conflict при удалении оценок
+            - Массовое удаление больше не засоряет лог одинаковыми ошибками, а показывает краткий итог конфликтов API
+            - Добавлены дополнительные варианты запроса `/journal/mark/delete`
 
             ### Что нового в v3.30.2:
             - Исправлено: Linux/macOS pre-cache Flet View теперь использует актуальный API `page.window.destroy()`
