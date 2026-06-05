@@ -281,8 +281,14 @@ class EdonishAPI:
             ("DELETE", {"mark_id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "DELETE body mark_id"),
             ("POST", {"id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "POST body id"),
             ("DELETE", {"id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "DELETE body id"),
+            ("POST", {"markId": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "POST body markId"),
+            ("DELETE", {"markId": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "DELETE body markId"),
             ("POST", None, {"mark_id": mid, "school_id": self.school_id, "lang": LANG_RU}, "POST query mark_id"),
+            ("POST", None, {"id": mid, "school_id": self.school_id, "lang": LANG_RU}, "POST query id"),
+            ("POST", None, {"markId": mid, "school_id": self.school_id, "lang": LANG_RU}, "POST query markId"),
             ("DELETE", None, {"mark_id": mid, "school_id": self.school_id, "lang": LANG_RU}, "DELETE query mark_id"),
+            ("DELETE", None, {"id": mid, "school_id": self.school_id, "lang": LANG_RU}, "DELETE query id"),
+            ("DELETE", None, {"markId": mid, "school_id": self.school_id, "lang": LANG_RU}, "DELETE query markId"),
         ]
         first_conflict = None
         last_error = None

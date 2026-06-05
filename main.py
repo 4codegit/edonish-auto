@@ -2581,6 +2581,15 @@ class EdonishAutoApp:
                 data["current_value"] = ""
                 data["mark_id"] = ""
                 self._log_message(f"Оценка удалена (строка {row + 1}, столбец {col + 1})")
+            except MarkDeleteConflict as ex:
+                cell.border_color = ft.Colors.RED_400
+                self._log_message(
+                    f"Ошибка удаления: {ex}",
+                    "error"
+                )
+                self._show_snackbar(
+                    "Оценку сейчас нельзя удалить через API. Обновите журнал и повторите позже."
+                )
             except Exception as ex:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка удаления: {ex}", "error")
