@@ -2501,19 +2501,17 @@ class EdonishAutoApp:
 
         def do_set():
             try:
-                # Delete existing mark before creating a new one
                 existing_mark_id = data.get("mark_id", "")
-                if existing_mark_id:
-                    try:
-                        self.api.delete_mark(mark_id=existing_mark_id)
-                    except Exception:
-                        pass  # Old mark may not exist or already deleted
+
+                # First try to create/update the mark directly. Some API variants
+                # allow overwriting an existing grade without a separate delete.
                 result = self.api.create_mark(
                     student_id=data["student_id"],
                     assignment_date_id=data["date_id"],
                     mark=grade,
                     quarter_property_id=data["qprop_id"],
                 )
+
                 if result and not (isinstance(result, dict) and result.get("error")):
                     data["current_value"] = str(grade)
                     data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
@@ -2521,11 +2519,30 @@ class EdonishAutoApp:
                     cell.bgcolor = ft.Colors.GREEN_50
                     cell.border_color = ft.Colors.TRANSPARENT
                     self._log_message(f"Оценка {grade} поставлена (строка {row + 1})")
-                    # Move to next cell
                     self._move_to_cell(row, col + 1)
                 else:
-                    cell.border_color = ft.Colors.RED_400
-                    self._log_message(f"Ошибка установки оценки: {result}", "error")
+                    if existing_mark_id:
+                        try:
+                            self.api.delete_mark(mark_id=existing_mark_id)
+                        except Exception:
+                            pass
+                        result = self.api.create_mark(
+                            student_id=data["student_id"],
+                            assignment_date_id=data["date_id"],
+                            mark=grade,
+                            quarter_property_id=data["qprop_id"],
+                        )
+                    if result and not (isinstance(result, dict) and result.get("error")):
+                        data["current_value"] = str(grade)
+                        data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
+                        cell.value = str(grade)
+                        cell.bgcolor = ft.Colors.GREEN_50
+                        cell.border_color = ft.Colors.TRANSPARENT
+                        self._log_message(f"Оценка {grade} поставлена (строка {row + 1})")
+                        self._move_to_cell(row, col + 1)
+                    else:
+                        cell.border_color = ft.Colors.RED_400
+                        self._log_message(f"Ошибка установки оценки: {result}", "error")
             except Exception as ex:
                 cell.border_color = ft.Colors.RED_400
                 self._log_message(f"Ошибка: {ex}", "error")
@@ -3302,13 +3319,18 @@ class EdonishAutoApp:
             if self._selected_cell:
                 row, col = self._selected_cell
                 cell = self._grade_cells.get((row, col))
-                if cell:
+                data = self._grade_data.get((row, col), {})
+                if cell and data:
                     val = cell.value
+                    current_saved = str(data.get("current_value", "") or "")
                     if val and val.strip() and val.strip().isdigit():
                         grade = int(val.strip())
-                        if MIN_GRADE <= grade <= MAX_GRADE:
+                        if MIN_GRADE <= grade <= MAX_GRADE and str(grade) != current_saved:
                             self._set_cell_grade(row, col, grade)
-                            self._show_snackbar(f"Оценка {grade} сохранена")
+                            return
+                    elif not val or not val.strip():
+                        if current_saved:
+                            self._delete_cell_grade(row, col)
                             return
             self._show_snackbar("Нет изменений для сохранения")
             return

@@ -277,12 +277,12 @@ class EdonishAPI:
         """Delete a regular journal mark by its ID."""
         mid = str(mark_id) if mark_id else ""
         attempts = [
-            ("POST", {"mark_id": mid}, {"school_id": self.school_id}, "POST body mark_id"),
-            ("DELETE", {"mark_id": mid}, {"school_id": self.school_id}, "DELETE body mark_id"),
-            ("POST", {"id": mid}, {"school_id": self.school_id}, "POST body id"),
-            ("DELETE", {"id": mid}, {"school_id": self.school_id}, "DELETE body id"),
-            ("POST", None, {"mark_id": mid, "school_id": self.school_id}, "POST query mark_id"),
-            ("DELETE", None, {"mark_id": mid, "school_id": self.school_id}, "DELETE query mark_id"),
+            ("POST", {"mark_id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "POST body mark_id"),
+            ("DELETE", {"mark_id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "DELETE body mark_id"),
+            ("POST", {"id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "POST body id"),
+            ("DELETE", {"id": mid}, {"school_id": self.school_id, "lang": LANG_RU}, "DELETE body id"),
+            ("POST", None, {"mark_id": mid, "school_id": self.school_id, "lang": LANG_RU}, "POST query mark_id"),
+            ("DELETE", None, {"mark_id": mid, "school_id": self.school_id, "lang": LANG_RU}, "DELETE query mark_id"),
         ]
         first_conflict = None
         last_error = None
