@@ -58,7 +58,7 @@ DEFAULT_BATCH_SIZE = 4
 
 # App settings
 APP_NAME = "eDonish Auto"
-APP_VERSION = "3.30.3"
+APP_VERSION = "3.30.4"
 APP_AUTHOR = "Edonish Auto Team"
 
 # Session file

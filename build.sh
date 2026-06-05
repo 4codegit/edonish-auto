@@ -8,7 +8,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION="3.30.3"
+VERSION="3.30.4"
 APP_NAME="edonish-auto"
 APP_TITLE="eDonish Auto"
 DIST_DIR="$SCRIPT_DIR/dist"
@@ -162,7 +162,7 @@ _create_windows_installer_script() {
     mkdir -p "$DIST_DIR/windows"
     cat > "$DIST_DIR/windows/installer.nsi" << 'NSIS_EOF'
 !define APPNAME "eDonish Auto"
-!define APPVERSION "3.30.3"
+!define APPVERSION "3.30.4"
 !define APPEXE "edonish-auto.exe"
 
 Name "${APPNAME} ${APPVERSION}"
@@ -235,7 +235,7 @@ _create_macos_dmg_script() {
     cat > "$DIST_DIR/macos/build_dmg.sh" << 'DMGEOF'
 #!/bin/bash
 set -e
-VERSION="3.30.3"
+VERSION="3.30.4"
 APP_NAME="edonish-auto"
 APP_TITLE="eDonish Auto"
 

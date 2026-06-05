@@ -153,6 +153,9 @@ class EdonishAutoApp:
         self._grid_cols = 0
         self._journal_loaded = False
         self._current_journal_params = {}
+        self._journal_loading = False
+        self._update_lock = threading.RLock()
+        self._safe_update_pending = False
 
         # Page config
         self.page.title = f"{APP_NAME} v{APP_VERSION}"
@@ -1955,6 +1958,10 @@ class EdonishAutoApp:
 
     def _on_load_journal(self):
         """Load journal data and build the interactive grade grid."""
+        if self._journal_loading:
+            self._show_snackbar("Журнал уже загружается")
+            return
+
         class_name = self.journal_class_dropdown.value
         subject_name = self.journal_subject_dropdown.value
         quarter_name = self.journal_quarter_dropdown.value
@@ -2020,7 +2027,23 @@ class EdonishAutoApp:
 
         self._student_quarter_data = {}  # row_idx -> {student_id, qprop_id, subject_id, curriculum_property_id, quarter_mark_id, quarter_mark_value}
 
+        self._journal_loading = True
+        self.journal_load_btn.disabled = True
+        self.journal_load_btn.content = ft.Row([
+            ft.ProgressRing(width=16, height=16, stroke_width=2),
+            ft.Text("Загрузка...", size=15, weight=FontWeight.W_500),
+        ], spacing=6, alignment=ft.MainAxisAlignment.CENTER)
+        self.journal_grid_container.content = Column(
+            [
+                Container(height=24),
+                ProgressRing(),
+                Text("Загрузка журнала...", size=14, color=ft.Colors.GREY_600),
+            ],
+            horizontal_alignment=CrossAxisAlignment.CENTER,
+            spacing=12,
+        )
         self._log_message("Загрузка журнала...")
+        self._safe_update()
 
         def load():
             try:
@@ -2037,6 +2060,13 @@ class EdonishAutoApp:
                 self._display_journal_grid(students, dates_data)
             except Exception as e:
                 self._log_message(f"Ошибка загрузки журнала: {e}", "error")
+                self._journal_loading = False
+                self.journal_load_btn.disabled = False
+                self.journal_load_btn.content = ft.Row([
+                    ft.Icon(Icons.DOWNLOAD, size=18),
+                    ft.Text("Загрузить", size=15, weight=FontWeight.W_500),
+                ], spacing=6, alignment=ft.MainAxisAlignment.CENTER)
+                self._safe_update()
 
         threading.Thread(target=load, daemon=True).start()
 
@@ -2048,6 +2078,12 @@ class EdonishAutoApp:
         self._selected_cell = None
         self._student_quarter_data = {}
         self._journal_dates = []  # Store dates for random grade and topic features
+        self.journal_load_btn.disabled = False
+        self.journal_load_btn.content = ft.Row([
+            ft.Icon(Icons.DOWNLOAD, size=18),
+            ft.Text("Загрузить", size=15, weight=FontWeight.W_500),
+        ], spacing=6, alignment=ft.MainAxisAlignment.CENTER)
+        self._journal_loading = False
 
         if not students:
             self.journal_grid_container.content = Column(
@@ -2162,6 +2198,9 @@ class EdonishAutoApp:
         empty_cells = 0
 
         for row_idx, s in enumerate(students):
+            if row_idx and row_idx % 5 == 0:
+                time.sleep(0)
+
             student_id = s["studentId"]
             student_name = f"{s.get('lastName', '')} {s.get('firstName', '')}"
 
@@ -2337,9 +2376,8 @@ class EdonishAutoApp:
         ))
 
         # Set the grid
-        self.journal_grid_container.content = Column(
-            student_rows,
-            scroll=ScrollMode.AUTO,
+        self.journal_grid_container.content = ListView(
+            controls=student_rows,
             expand=True,
             spacing=0,
         )
@@ -3209,20 +3247,30 @@ class EdonishAutoApp:
         """Throttled page.update() — enforces minimum interval between calls.
         This prevents UI freeze when multiple threads all try to update
         the page simultaneously."""
-        now = time.monotonic()
-        elapsed = now - self._last_safe_update_time
-        if elapsed < self._safe_update_min_interval:
-            # Too soon — schedule a delayed update instead
-            wait = self._safe_update_min_interval - elapsed
-            def _delayed():
-                time.sleep(wait)
-                try:
-                    self.page.update()
-                    self._last_safe_update_time = time.monotonic()
-                except Exception:
-                    pass
-            threading.Thread(target=_delayed, daemon=True).start()
-        else:
+        with self._update_lock:
+            now = time.monotonic()
+            elapsed = now - self._last_safe_update_time
+            if elapsed < self._safe_update_min_interval:
+                if self._safe_update_pending:
+                    return
+                self._safe_update_pending = True
+                wait = self._safe_update_min_interval - elapsed
+
+                def _delayed():
+                    time.sleep(wait)
+                    try:
+                        with self._update_lock:
+                            self.page.update()
+                            self._last_safe_update_time = time.monotonic()
+                    except Exception:
+                        pass
+                    finally:
+                        with self._update_lock:
+                            self._safe_update_pending = False
+
+                threading.Thread(target=_delayed, daemon=True).start()
+                return
+
             try:
                 self.page.update()
                 self._last_safe_update_time = time.monotonic()

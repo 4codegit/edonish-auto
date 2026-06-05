@@ -4,7 +4,7 @@
 ; ═══════════════════════════════════════════════════════════════════
 
 !define APPNAME "eDonish Auto"
-!define APPVERSION "3.30.3"
+!define APPVERSION "3.30.4"
 !define APPEXE "edonish-auto.exe"
 !define COMPANY "Edonish Auto Team"
 

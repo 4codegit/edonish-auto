@@ -152,7 +152,12 @@ class EdonishAPI:
             return None
 
         resp.raise_for_status()
-        return resp.json()
+        if not resp.content or not resp.text.strip():
+            return {}
+        try:
+            return resp.json()
+        except ValueError:
+            return {"status_code": resp.status_code, "text": resp.text}
 
     def get_journal_options(self, lang: int = LANG_RU) -> List[Dict]:
         """Get available classes, subjects, and subgroups for the teacher."""

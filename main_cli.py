@@ -160,8 +160,8 @@ def parse_args():
     )
 
     # Auth
-    parser.add_argument("--login", required=True, help="Логин (ID) от edonish.tj")
-    parser.add_argument("--password", required=True, help="Пароль от edonish.tj")
+    parser.add_argument("--login", help="Логин (ID) от edonish.tj")
+    parser.add_argument("--password", help="Пароль от edonish.tj")
 
     # Filters
     parser.add_argument("--class", dest="class_name", default="all",
@@ -219,6 +219,11 @@ def parse_args():
     env_workers = os.environ.get("EDONISH_WORKERS")
     if env_workers and args.workers == DEFAULT_WORKERS:
         args.workers = int(env_workers)
+
+    if not args.login or not args.password:
+        parser.error(
+            "--login и --password обязательны, если не заданы EDONISH_LOGIN и EDONISH_PASSWORD"
+        )
 
     return args
 
