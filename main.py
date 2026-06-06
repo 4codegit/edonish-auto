@@ -73,7 +73,7 @@ from config import (
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
     SESSION_FILE, _get_app_dir,
 )
-from api_client import EdonishAPI, AuthenticationError
+from api_client import EdonishAPI, AuthenticationError, DateLockedError
 from grade_engine import GradeEngine, GradePlan, weighted_random_grade
 
 # Mobile-safe logging: on Android, ~/ resolves to /data/ which is not writable.
@@ -725,10 +725,34 @@ class EdonishAutoApp:
             ),
         )
 
+        # ── Date-lock warning banner ────────────────────────────────
+        date_lock_warning = Container(
+            content=Row([
+                Icon(Icons.WARNING_AMBER_ROUNDED, size=20, color=ft.Colors.ORANGE_700),
+                Text(
+                    "Внимание: сервер edonish.tj блокирует изменение оценок за прошлые даты. "
+                    "Оценки можно менять только в текущем дне!",
+                    size=13,
+                    color=ft.Colors.ORANGE_900,
+                ),
+            ], spacing=8),
+            padding=ft.controls.padding.Padding(left=12, top=8, right=12, bottom=8),
+            bgcolor=ft.Colors.ORANGE_50,
+            border=Border(
+                left=BorderSide(3, ft.Colors.ORANGE_600),
+                top=BorderSide(0, ft.Colors.TRANSPARENT),
+                right=BorderSide(0, ft.Colors.TRANSPARENT),
+                bottom=BorderSide(0, ft.Colors.TRANSPARENT),
+            ),
+            border_radius=8,
+        )
+
         self.auto_grade_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
             controls=[
+                date_lock_warning,
+                Container(height=8),
                 settings_card,
                 Container(height=12),
                 action_card,
@@ -2318,16 +2342,23 @@ class EdonishAutoApp:
         ]
         for d in dates:
             date_str = d.get("assignmentDate", "")[5:]  # MM-DD
+            full_date = d.get("assignmentDate", "")[:10]  # YYYY-MM-DD
+            is_past = full_date < datetime.now().strftime("%Y-%m-%d")
+            header_bgcolor = ft.Colors.ORANGE_50 if is_past else ft.Colors.BLUE_50
+            header_border_color = ft.Colors.ORANGE_200 if is_past else ft.Colors.BLUE_200
+            header_text_color = ft.Colors.ORANGE_800 if is_past else None
+            header_tooltip = "Прошедшая дата — оценка заблокирована" if is_past else "Рандомная оценка"
             header_cells.append(
                 Container(
-                    content=Text(date_str, size=text_size - 1, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    content=Text(date_str, size=text_size - 1, weight=FontWeight.BOLD, text_align=TextAlign.CENTER, color=header_text_color),
                     width=cell_width,
                     padding=2,
-                    bgcolor=ft.Colors.BLUE_50,
+                    bgcolor=header_bgcolor,
                     border=Border(
                         right=BorderSide(1, ft.Colors.OUTLINE_VARIANT),
-                        bottom=BorderSide(2, ft.Colors.BLUE_200),
+                        bottom=BorderSide(2, header_border_color),
                     ),
+                    tooltip=header_tooltip,
                 )
             )
         # Quarter/Semester/Year columns
@@ -2418,6 +2449,8 @@ class EdonishAutoApp:
                     mark_value = mark_value_raw
                 mark_id = mark_info.get("assignmentMarkId", "") if mark_info else ""
                 qprop_id = d.get("quarterPropertyId", self._current_journal_params.get("qprop_id", 0))
+                full_date = d.get("assignmentDate", "")[:10]
+                is_past_date = full_date < datetime.now().strftime("%Y-%m-%d")
 
                 if mark_value:
                     total_marks += 1
@@ -2432,6 +2465,7 @@ class EdonishAutoApp:
                     student_id=student_id,
                     date_id=date_id,
                     qprop_id=qprop_id,
+                    is_past_date=is_past_date,
                 )
                 row_cells.append(cell)
 
@@ -2561,12 +2595,17 @@ class EdonishAutoApp:
         except Exception:
             pass
 
-    def _make_grade_cell(self, row, col, value, mark_id, student_id, date_id, qprop_id):
+    def _make_grade_cell(self, row, col, value, mark_id, student_id, date_id, qprop_id, is_past_date=False):
         """Create a single editable grade cell (TextField)."""
         has_mark = bool(value and str(value).strip())
-        cell_bgcolor = ft.Colors.GREEN_50 if has_mark else (
-            ft.Colors.GREY_50 if row % 2 == 0 else ft.Colors.SURFACE
-        )
+        if is_past_date and has_mark:
+            cell_bgcolor = ft.Colors.ORANGE_100
+        elif is_past_date:
+            cell_bgcolor = ft.Colors.ORANGE_50
+        elif has_mark:
+            cell_bgcolor = ft.Colors.GREEN_50
+        else:
+            cell_bgcolor = ft.Colors.GREY_50 if row % 2 == 0 else ft.Colors.SURFACE
 
         # Store data for this cell
         self._grade_data[(row, col)] = {
@@ -2576,6 +2615,7 @@ class EdonishAutoApp:
             "qprop_id": qprop_id,
             "current_value": value,
             "original_value": value,
+            "is_past_date": is_past_date,
         }
 
         # Mobile-friendly cell size
@@ -2663,15 +2703,23 @@ class EdonishAutoApp:
         """Set a grade for a cell via API call. Deletes existing mark first if present."""
         data = self._grade_data.get((row, col))
         if not data:
-            self._log_message(f"⚠️ Нет данных для ячейки ({row},{col})", "error")
+            self._log_message(f"\u26a0\ufe0f Нет данных для ячейки ({row},{col})", "error")
             return
 
         cell = self._grade_cells.get((row, col))
         if not cell:
-            self._log_message(f"⚠️ Нет UI элемента для ячейки ({row},{col})", "error")
+            self._log_message(f"\u26a0\ufe0f Нет UI элемента для ячейки ({row},{col})", "error")
             return
 
-        self._log_message(f"➡️ Установка оценки {grade} в ячейке (строка {row + 1})")
+        # Pre-check: warn if trying to modify a past-date cell
+        if data.get("is_past_date"):
+            self._log_message(
+                "\u26a0\ufe0f Внимание: дата этой ячейки уже прошла. "
+                "Сервер может заблокировать изменение оценки.",
+                "warning"
+            )
+
+        self._log_message(f"\u27a1\ufe0f Установка оценки {grade} в ячейке (строка {row + 1})")
 
         # Visual feedback only
         cell.border_color = ft.Colors.ORANGE_400
@@ -2682,16 +2730,31 @@ class EdonishAutoApp:
                 # Delete existing mark before creating a new one
                 existing_mark_id = data.get("mark_id", "")
                 if existing_mark_id:
-                    self._log_message(f"  🗑️ Удаление старой оценки (ID: {existing_mark_id})")
+                    self._log_message(f"  \U0001f5d1\ufe0f Удаление старой оценки (ID: {existing_mark_id})")
                     try:
                         result = self.api.delete_mark(mark_id=existing_mark_id)
                         if result and isinstance(result, dict) and result.get("error"):
-                            self._log_message(f"  ⚠️ Ошибка удаления (пропускаем): {result.get('error')}", "warning")
+                            self._log_message(f"  \u26a0\ufe0f Ошибка удаления (пропускаем): {result.get('error')}", "warning")
+                    except DateLockedError as dle:
+                        # Date is locked — cannot delete old mark
+                        def update_locked():
+                            cell.value = data.get("current_value", "")
+                            cell.border_color = ft.Colors.RED_400
+                            cell.bgcolor = ft.Colors.RED_50
+                            self._log_message(
+                                f"\u274c Дата заблокирована! Невозможно изменить оценку за прошлую дату.\n"
+                                f"Сервер edonish.tj блокирует изменения после смены дня.\n"
+                                f"Подробности: {dle}", "error"
+                            )
+                            self._show_snackbar("\u26a0\ufe0f Дата заблокирована сервером! Оценки за прошлые даты нельзя изменить.")
+                            self._safe_update()
+                        self.page.run_thread(update_locked)
+                        return
                     except Exception as e:
                         # Ignore deletion errors - mark might already be deleted or locked
-                        self._log_message(f"  ⚠️ Ошибка удаления (пропускаем): {e}", "warning")
+                        self._log_message(f"  \u26a0\ufe0f Ошибка удаления (пропускаем): {e}", "warning")
                 
-                self._log_message(f"  ➕ Создание новой оценки: student={data['student_id']}, date={data['date_id']}, grade={grade}")
+                self._log_message(f"  \u2795 Создание новой оценки: student={data['student_id']}, date={data['date_id']}, grade={grade}")
                 result = self.api.create_mark(
                     student_id=data["student_id"],
                     assignment_date_id=data["date_id"],
@@ -2704,7 +2767,7 @@ class EdonishAutoApp:
                     data["original_value"] = str(grade)
                     new_mark_id = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
                     data["mark_id"] = new_mark_id
-                    self._log_message(f"  ✅ Успех! Mark ID: {new_mark_id}")
+                    self._log_message(f"  \u2705 Успех! Mark ID: {new_mark_id}")
                     
                     # Update UI in background thread
                     def update_ui():
@@ -2712,21 +2775,35 @@ class EdonishAutoApp:
                         cell.border_color = ft.Colors.TRANSPARENT
                         if hasattr(cell, 'bgcolor'):
                             cell.bgcolor = ft.Colors.GREEN_50
-                        self._log_message(f"✅ Оценка {grade} поставлена (строка {row + 1})")
+                        self._log_message(f"\u2705 Оценка {grade} поставлена (строка {row + 1})")
                         self._move_to_cell(row, col + 1)
                         self._safe_update()
                     self.page.run_thread(update_ui)
                 else:
                     err_msg = result.get("error", "Unknown error") if isinstance(result, dict) else "API error"
-                    self._log_message(f"  ❌ Ошибка API: {err_msg}", "error")
+                    self._log_message(f"  \u274c Ошибка API: {err_msg}", "error")
                     def update_error():
                         cell.border_color = ft.Colors.RED_400
+                        cell.bgcolor = ft.Colors.RED_50
                         self._log_message(f"Ошибка установки оценки: {err_msg}", "error")
                         self._safe_update()
                     self.page.run_thread(update_error)
+            except DateLockedError as dle:
+                def update_locked():
+                    cell.value = data.get("current_value", "")
+                    cell.border_color = ft.Colors.RED_400
+                    cell.bgcolor = ft.Colors.RED_50
+                    self._log_message(
+                        f"\u274c Дата заблокирована! Невозможно поставить оценку за прошлую дату.\n"
+                        f"Сервер edonish.tj блокирует изменения после смены дня.\n"
+                        f"Подробности: {dle}", "error"
+                    )
+                    self._show_snackbar("\u26a0\ufe0f Дата заблокирована сервером! Оценки за прошлые даты нельзя изменить.")
+                    self._safe_update()
+                self.page.run_thread(update_locked)
             except Exception as e:
                 error_msg = str(e)
-                self._log_message(f"  ❌ Исключение: {error_msg}", "error")
+                self._log_message(f"  \u274c Исключение: {error_msg}", "error")
                 def update_error():
                     cell.border_color = ft.Colors.RED_400
                     self._log_message(f"Ошибка: {error_msg}", "error")
@@ -2776,6 +2853,18 @@ class EdonishAutoApp:
                     self._log_message(f"Оценка удалена (строка {row + 1})")
                     self._safe_update()
                 self.page.run_thread(update_ui)
+            except DateLockedError as dle:
+                def update_locked():
+                    cell.border_color = ft.Colors.RED_400
+                    cell.bgcolor = ft.Colors.RED_50
+                    self._log_message(
+                        f"\u274c Дата заблокирована! Невозможно удалить оценку за прошлую дату.\n"
+                        f"Сервер edonish.tj блокирует изменения после смены дня.\n"
+                        f"Подробности: {dle}", "error"
+                    )
+                    self._show_snackbar("\u26a0\ufe0f Дата заблокирована! Оценки за прошлые даты нельзя удалить.")
+                    self._safe_update()
+                self.page.run_thread(update_locked)
             except Exception as e:
                 error_msg = str(e)
                 def update_error():

@@ -152,10 +152,42 @@ class EdonishAPI:
         resp = self.session.request(method, url, **kwargs)
 
         if resp.status_code == 403:
-            # Try refreshing token
+            # Try refreshing token first
             if self._refresh_auth():
                 kwargs["headers"] = self._headers
                 resp = self.session.request(method, url, **kwargs)
+
+            # If still 403 after refresh — check if it's a date-lock issue
+            if resp.status_code == 403:
+                try:
+                    error_body = resp.json()
+                    error_msg = error_body.get("message", "") if isinstance(error_body, dict) else ""
+                except Exception:
+                    error_msg = resp.text[:200] if resp.text else ""
+
+                # Detect date-lock patterns from the server
+                date_lock_keywords = [
+                    "date", "past", "expired", "locked", "closed",
+                    "нельзя", "недоступно", "изменить", "прошл",
+                    "cannot", "forbidden", "not allowed",
+                    "status_code",
+                ]
+                msg_lower = error_msg.lower()
+                is_date_lock = any(kw in msg_lower for kw in date_lock_keywords)
+
+                if is_date_lock:
+                    raise DateLockedError(
+                        f"Дата заблокирована сервером: невозможно изменить оценку за прошлую дату. "
+                        f"({error_msg or f'HTTP {resp.status_code}'})",
+                        status_code=resp.status_code,
+                    )
+
+                # Generic 403 — could still be date lock
+                raise DateLockedError(
+                    f"Доступ запрещён (403). Возможно дата заблокирована. "
+                    f"({error_msg or f'HTTP {resp.status_code}'})",
+                    status_code=resp.status_code,
+                )
 
         if resp.status_code == 404:
             return None
@@ -456,3 +488,15 @@ class AuthenticationError(Exception):
 class APIError(Exception):
     """Raised when an API call fails."""
     pass
+
+
+class DateLockedError(APIError):
+    """Raised when trying to modify a grade on a date that is locked by the server.
+    
+    This happens when the date has passed (e.g. trying to change a grade
+    from yesterday or an earlier date). The edonish.tj server blocks
+    modifications to past dates based on role permissions.
+    """
+    def __init__(self, message: str = "", status_code: int = 0):
+        self.status_code = status_code
+        super().__init__(message)
