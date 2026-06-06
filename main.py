@@ -2654,11 +2654,15 @@ class EdonishAutoApp:
         """Set a grade for a cell via API call. Deletes existing mark first if present."""
         data = self._grade_data.get((row, col))
         if not data:
+            self._log_message(f"⚠️ Нет данных для ячейки ({row},{col})", "error")
             return
 
         cell = self._grade_cells.get((row, col))
         if not cell:
+            self._log_message(f"⚠️ Нет UI элемента для ячейки ({row},{col})", "error")
             return
+
+        self._log_message(f"➡️ Установка оценки {grade} в ячейке (строка {row + 1})")
 
         # Visual feedback only
         cell.border_color = ft.Colors.ORANGE_400
@@ -2669,39 +2673,48 @@ class EdonishAutoApp:
                 # Delete existing mark before creating a new one
                 existing_mark_id = data.get("mark_id", "")
                 if existing_mark_id:
+                    self._log_message(f"  🗑️ Удаление старой оценки (ID: {existing_mark_id})")
                     try:
                         self.api.delete_mark(mark_id=existing_mark_id)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        self._log_message(f"  ⚠️ Ошибка удаления: {e}", "warning")
+                
+                self._log_message(f"  ➕ Создание новой оценки: student={data['student_id']}, date={data['date_id']}, grade={grade}")
                 result = self.api.create_mark(
                     student_id=data["student_id"],
                     assignment_date_id=data["date_id"],
                     mark=grade,
                     quarter_property_id=data["qprop_id"],
                 )
+                
                 if result and not (isinstance(result, dict) and result.get("error")):
                     data["current_value"] = str(grade)
                     data["original_value"] = str(grade)
-                    data["mark_id"] = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
+                    new_mark_id = result.get("assignmentMarkId", "") if isinstance(result, dict) else ""
+                    data["mark_id"] = new_mark_id
+                    self._log_message(f"  ✅ Успех! Mark ID: {new_mark_id}")
+                    
                     # Update UI in background thread
                     def update_ui():
                         cell.value = str(grade)
                         cell.border_color = ft.Colors.TRANSPARENT
-                        # Force background color update
                         if hasattr(cell, 'bgcolor'):
                             cell.bgcolor = ft.Colors.GREEN_50
-                        self._log_message(f"Оценка {grade} поставлена (строка {row + 1})")
+                        self._log_message(f"✅ Оценка {grade} поставлена (строка {row + 1})")
                         self._move_to_cell(row, col + 1)
                         self._safe_update()
                     self.page.run_thread(update_ui)
                 else:
+                    err_msg = result.get("error", "Unknown error") if isinstance(result, dict) else "API error"
+                    self._log_message(f"  ❌ Ошибка API: {err_msg}", "error")
                     def update_error():
                         cell.border_color = ft.Colors.RED_400
-                        self._log_message(f"Ошибка установки оценки", "error")
+                        self._log_message(f"Ошибка установки оценки: {err_msg}", "error")
                         self._safe_update()
                     self.page.run_thread(update_error)
             except Exception as e:
                 error_msg = str(e)
+                self._log_message(f"  ❌ Исключение: {error_msg}", "error")
                 def update_error():
                     cell.border_color = ft.Colors.RED_400
                     self._log_message(f"Ошибка: {error_msg}", "error")
@@ -3295,11 +3308,21 @@ class EdonishAutoApp:
 
         # Count cells with marks (already auto-saved)
         marked_count = 0
+        empty_count = 0
         for (row, col), data in self._grade_data.items():
             if data.get("mark_id"):
                 marked_count += 1
+            else:
+                cell = self._grade_cells.get((row, col))
+                if cell and cell.value and cell.value.strip():
+                    self._log_message(f"⚠️ Ячейка ({row},{col}) имеет значение '{cell.value}' но нет mark_id")
+                    empty_count += 1
 
-        self._show_snackbar(f"✅ Все оценки сохранены автоматически ({marked_count} оценок)")
+        if empty_count > 0:
+            self._log_message(f"ℹ {empty_count} ячеек с данными, но без сохранённых оценок")
+            self._show_snackbar(f"⚠️ Есть {empty_count} несохранённых ячеек - попробуйте ввести оценку заново")
+        else:
+            self._show_snackbar(f"✅ Все оценки сохранены автоматически ({marked_count} оценок)")
 
     def _show_snackbar(self, message: str):
         try:
