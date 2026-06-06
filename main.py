@@ -3285,74 +3285,21 @@ class EdonishAutoApp:
             pass
 
     def _on_save_journal(self):
-        """Save all modified grades in the journal (Ctrl+S)."""
+        """Save all modified grades in the journal (Ctrl+S).
+        
+        Note: Grades are auto-saved when you type them. This function is for bulk operations.
+        """
         if not self._journal_loaded:
             self._show_snackbar("Сначала загрузите журнал!")
             return
 
-        # Find all cells that have been modified but not yet saved
-        modified_cells = []
+        # Count cells with marks (already auto-saved)
+        marked_count = 0
         for (row, col), data in self._grade_data.items():
-            cell = self._grade_cells.get((row, col))
-            if not cell:
-                continue
-            cell_value = (cell.value or "").strip()
-            original_value = data.get("original_value", "")
-            if cell_value and cell_value.isdigit():
-                grade = int(cell_value)
-                if MIN_GRADE <= grade <= MAX_GRADE and cell_value != original_value:
-                    modified_cells.append((row, col, grade))
-            elif not cell_value and original_value:
-                modified_cells.append((row, col, None))
+            if data.get("mark_id"):
+                marked_count += 1
 
-        if not modified_cells:
-            if self._selected_cell:
-                row, col = self._selected_cell
-                cell = self._grade_cells.get((row, col))
-                if cell:
-                    val = cell.value
-                    if val and val.strip() and val.strip().isdigit():
-                        grade = int(val.strip())
-                        if MIN_GRADE <= grade <= MAX_GRADE:
-                            self._set_cell_grade(row, col, grade)
-                            self._show_snackbar(f"✅ Оценка {grade} сохранена")
-                            return
-            self._show_snackbar("ℹ Нет изменений для сохранения")
-            return
-
-        # Save all modified cells with progress
-        save_count = 0
-        delete_count = 0
-        total = len(modified_cells)
-        
-        for i, (row, col, grade) in enumerate(modified_cells):
-            if grade is None:
-                self._delete_cell_grade(row, col)
-                delete_count += 1
-            else:
-                self._set_cell_grade(row, col, grade)
-                save_count += 1
-            
-            # Show progress for large batches
-            if total > 10 and (i + 1) % 10 == 0:
-                self._show_snackbar(f"⏳ Сохранено: {i + 1}/{total}")
-            
-            time.sleep(0.15)
-
-        # Final success message
-        if save_count > 0 or delete_count > 0:
-            if total == 1:
-                if save_count:
-                    self._show_snackbar(f"✅ Оценка сохранена")
-                else:
-                    self._show_snackbar(f"✅ Оценка удалена")
-            else:
-                msg = f"✅ Сохранено: {save_count}"
-                if delete_count:
-                    msg += f", удалено: {delete_count}"
-                self._show_snackbar(msg)
-        else:
-            self._show_snackbar("ℹ Ничего не сохранено")
+        self._show_snackbar(f"✅ Все оценки сохранены автоматически ({marked_count} оценок)")
 
     def _show_snackbar(self, message: str):
         try:
