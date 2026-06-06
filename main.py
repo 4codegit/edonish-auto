@@ -2651,6 +2651,7 @@ class EdonishAutoApp:
         cell.border_color = ft.Colors.ORANGE_400
 
         def do_set():
+            error_msg = None
             try:
                 # Delete existing mark before creating a new one
                 existing_mark_id = data.get("mark_id", "")
@@ -2686,10 +2687,11 @@ class EdonishAutoApp:
                         self._log_message(f"Ошибка установки оценки", "error")
                         self._safe_update()
                     self.page.run_thread(update_error)
-            except Exception as ex:
+            except Exception as e:
+                error_msg = str(e)
                 def update_error():
                     cell.border_color = ft.Colors.RED_400
-                    self._log_message(f"Ошибка: {ex}", "error")
+                    self._log_message(f"Ошибка: {error_msg}", "error")
                     self._safe_update()
                 self.page.run_thread(update_error)
 
@@ -2723,6 +2725,7 @@ class EdonishAutoApp:
         cell.border_color = ft.Colors.RED_400
 
         def do_delete():
+            error_msg = None
             try:
                 result = self.api.delete_mark(mark_id=mark_id)
                 def update_ui():
@@ -2735,10 +2738,11 @@ class EdonishAutoApp:
                     self._log_message(f"Оценка удалена (строка {row + 1})")
                     self._safe_update()
                 self.page.run_thread(update_ui)
-            except Exception as ex:
+            except Exception as e:
+                error_msg = str(e)
                 def update_error():
                     cell.border_color = ft.Colors.RED_400
-                    self._log_message(f"Ошибка удаления: {ex}", "error")
+                    self._log_message(f"Ошибка удаления: {error_msg}", "error")
                     self._safe_update()
                 self.page.run_thread(update_error)
 
