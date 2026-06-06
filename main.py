@@ -50,6 +50,7 @@ import threading
 import logging
 import time
 from datetime import datetime
+from typing import Dict, List, Optional
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -74,6 +75,22 @@ from config import (
     SESSION_FILE, _get_app_dir,
 )
 from api_client import EdonishAPI, AuthenticationError, DateLockedError
+
+# Role display names and colors
+ROLE_DISPLAY = {
+    "school_admin": {"label": "Админ школы", "icon": Icons.ADMIN_PANEL_SETTINGS, "color": ft.Colors.PURPLE_700},
+    "director": {"label": "Директор", "icon": Icons.ACCOUNT_BALANCE, "color": ft.Colors.INDIGO_700},
+    "headteacher": {"label": "Завуч", "icon": Icons.SCHOOL, "color": ft.Colors.TEAL_700},
+    "chief_curator": {"label": "Гл. куратор", "icon": Icons.SUPERVISED_USER_CIRCLE, "color": ft.Colors.ORANGE_700},
+    "regional_curator": {"label": "Район. куратор", "icon": Icons.LOCATION_CITY, "color": ft.Colors.BROWN_700},
+    "classroom-teacher": {"label": "Кл. руководитель", "icon": Icons.PEOPLE, "color": ft.Colors.BLUE_700},
+    "teacher": {"label": "Учитель", "icon": Icons.PERSON, "color": ft.Colors.GREEN_700},
+    "parent": {"label": "Родитель", "icon": Icons.FAMILY_RESTROOM, "color": ft.Colors.PINK_700},
+    "student": {"label": "Ученик", "icon": Icons.FACE, "color": ft.Colors.CYAN_700},
+}
+
+# Roles that can modify grades
+GRADE_MODIFY_ROLES = {"teacher", "classroom-teacher", "school_admin"}
 from grade_engine import GradeEngine, GradePlan, weighted_random_grade
 
 # Mobile-safe logging: on Android, ~/ resolves to /data/ which is not writable.
@@ -326,14 +343,28 @@ class EdonishAutoApp:
 
         self.nav_index = 0
 
-        # AppBar - simplified
+        # Build user avatar with initials
+        self._user_avatar = self._make_user_avatar(user_info)
+
+        # Build role badge
+        self._role_badge = self._make_role_badge()
+
+        # AppBar - with user avatar and role info
         appbar = AppBar(
-            leading=Icon(Icons.SCHOOL, color=ft.Colors.BLUE_600, size=26),
+            leading=self._user_avatar,
             leading_width=50,
-            title=Text(f"{APP_NAME}", size=16, weight=FontWeight.W_600),
+            title=Column([
+                Text(f"{APP_NAME}", size=14, weight=FontWeight.W_600),
+                self._role_badge,
+            ], spacing=2, alignment=ft.MainAxisAlignment.CENTER),
             center_title=False,
             bgcolor=ft.Colors.SURFACE,
             actions=[
+                IconButton(
+                    icon=Icons.SWAP_HORIZ,
+                    tooltip="Сменить роль",
+                    on_click=self._show_role_switcher,
+                ),
                 IconButton(
                     icon=Icons.PERSON,
                     tooltip="Профиль",
@@ -416,30 +447,241 @@ class EdonishAutoApp:
         self.page.on_keyboard_event = self._on_dashboard_keyboard
         self.page.update()
 
-    def _show_user_info(self, e=None):
-        """Show user info dialog."""
-        name = f"{self._user_info.get('last_name', '')} {self._user_info.get('first_name', '')}".strip()
-        role = self._user_info.get('role', 'unknown')
-        school_id = self.api.school_id
-        admin_rights = "✅" if self.api.has_school_admin_rights else "❌"
-        roles_list = ", ".join(self._user_info.get('roles', [])) or "неизвестно"
+    def _make_user_avatar(self, user_info: Dict) -> Container:
+        """Create a circular avatar with user initials."""
+        first = user_info.get('first_name', '')
+        last = user_info.get('last_name', '')
+        initials = ""
+        if first:
+            initials += first[0].upper()
+        if last:
+            initials += last[0].upper()
+        if not initials:
+            initials = "?"
+        
+        role_info = ROLE_DISPLAY.get(self.api.role, ROLE_DISPLAY["teacher"])
+        avatar_color = role_info["color"]
+        
+        return Container(
+            width=36,
+            height=36,
+            border_radius=18,
+            bgcolor=avatar_color,
+            alignment=ft.Alignment(0, 0),
+            content=Text(initials, size=14, weight=FontWeight.BOLD, color=ft.Colors.WHITE),
+        )
+
+    def _make_role_badge(self) -> Container:
+        """Create a small badge showing the current role with color indicator."""
+        role = self.api.role or "teacher"
+        role_info = ROLE_DISPLAY.get(role, {"label": role, "color": ft.Colors.GREY_600})
+        can_modify = self.api.can_modify_grades
+        
+        # Show if user can modify grades
+        modify_icon = Icons.EDIT_OUTLINED if can_modify else Icons.LOCK_OUTLINED
+        modify_color = ft.Colors.GREEN_600 if can_modify else ft.Colors.RED_400
+        
+        return Container(
+            content=Row([
+                Icon(role_info.get("icon", Icons.PERSON), size=12, color=role_info["color"]),
+                Text(role_info["label"], size=11, color=ft.Colors.GREY_700),
+                Container(width=4),
+                Icon(modify_icon, size=11, color=modify_color),
+                Text("оценки" if can_modify else "только чтение", size=10, color=modify_color),
+            ], spacing=3, alignment=ft.MainAxisAlignment.START),
+        )
+
+    def _show_role_switcher(self, e=None):
+        """Show dialog to switch between available roles."""
+        available = self.api.available_role_names
+        current_role = self.api.role
+        
+        if len(available) <= 1:
+            self._show_snackbar("У вас только одна роль — переключение недоступно")
+            return
+        
+        # Build role choice rows
+        role_rows = []
+        for rname in available:
+            role_info = ROLE_DISPLAY.get(rname, {"label": rname, "icon": Icons.PERSON, "color": ft.Colors.GREY_600})
+            is_current = rname == current_role
+            can_modify = rname in GRADE_MODIFY_ROLES
+            
+            row = Row([
+                Icon(role_info["icon"], size=20, color=role_info["color"]),
+                Text(role_info["label"], size=15, weight=FontWeight.W_700 if is_current else FontWeight.W_400),
+                Container(width=8),
+                Icon(Icons.RADIO_BUTTON_CHECKED if is_current else Icons.RADIO_BUTTON_UNCHECKED,
+                      size=18, color=ft.Colors.BLUE_600 if is_current else ft.Colors.GREY_400),
+                Container(expand=True),
+                Icon(Icons.EDIT if can_modify else Icons.LOCK, size=14,
+                     color=ft.Colors.GREEN_600 if can_modify else ft.Colors.GREY_400),
+                Text("оценки" if can_modify else "чтение", size=11,
+                     color=ft.Colors.GREEN_600 if can_modify else ft.Colors.GREY_500),
+            ], spacing=6)
+            
+            if not is_current:
+                # Make it clickable to switch
+                row_container = Container(
+                    content=row,
+                    padding=8,
+                    border_radius=8,
+                    on_click=lambda _, rn=rname: self._on_switch_role(rn),
+                    ink=True,
+                )
+                role_rows.append(row_container)
+            else:
+                # Current role — highlighted
+                role_rows.append(Container(
+                    content=row,
+                    padding=8,
+                    border_radius=8,
+                    bgcolor=ft.Colors.BLUE_50,
+                    border=Border.all(1, ft.Colors.BLUE_200),
+                ))
         
         self.page.dialog = AlertDialog(
-            title=Row([Icon(Icons.PERSON, color=ft.Colors.BLUE_600), Text(" Профиль", size=18, weight=FontWeight.W_600)], spacing=8),
+            title=Row([
+                Icon(Icons.SWAP_HORIZ, color=ft.Colors.BLUE_600),
+                Text("Сменить роль", size=18, weight=FontWeight.W_600),
+            ], spacing=8),
             content=Column([
-                Text(name if name else "Неизвестно", size=18, weight=FontWeight.W_700),
-                Text(f"Роль: {role}", size=14, color=ft.Colors.GREY_700),
-                Text(f"Права админа: {admin_rights}", size=14, color=ft.Colors.GREEN_700 if self.api.has_school_admin_rights else ft.Colors.RED_600),
-                Text(f"Школа ID: {school_id}", size=14, color=ft.Colors.GREY_700),
-                Text(f"Все роли: {roles_list}", size=13, color=ft.Colors.GREY_500),
-            ], spacing=10),
+                Text("Текущая роль выделена синим. Нажмите на другую роль чтобы переключиться.",
+                     size=12, color=ft.Colors.GREY_600),
+                Container(height=12),
+                *role_rows,
+                Container(height=8),
+                Divider(),
+                Container(height=4),
+                Row([
+                    Icon(Icons.INFO_OUTLINED, size=14, color=ft.Colors.GREY_500),
+                    Text("Оценки можно менять с ролями: учитель, кл. руководитель, админ",
+                         size=11, color=ft.Colors.GREY_500),
+                ], spacing=4),
+            ], spacing=4, scroll=ScrollMode.AUTO),
             actions=[
+                TextButton("Отмена", on_click=lambda _: self.page.dialog.close()),
+            ],
+        )
+        self.page.dialog.open = True
+        self.page.update()
+
+    def _on_switch_role(self, role_name: str):
+        """Switch to a different role and update the UI."""
+        success = self.api.switch_role(role_name)
+        if success:
+            role_info = ROLE_DISPLAY.get(role_name, {"label": role_name})
+            self._log_message(f"Роль переключена на: {role_info['label']} ({role_name})")
+            
+            # Update the avatar and badge
+            self._user_avatar = self._make_user_avatar(self._user_info)
+            self._role_badge = self._make_role_badge()
+            
+            # Update AppBar
+            if self.page.appbar:
+                self.page.appbar.leading = self._user_avatar
+                self.page.appbar.title = Column([
+                    Text(f"{APP_NAME}", size=14, weight=FontWeight.W_600),
+                    self._role_badge,
+                ], spacing=2, alignment=ft.MainAxisAlignment.CENTER)
+            
+            # Close dialog and reload data for new role
+            if self.page.dialog:
+                self.page.dialog.open = False
+            
+            self._show_snackbar(f"Роль: {role_info['label']}")
+            
+            # Reload initial data (journal options may differ per role)
+            self._load_initial_data()
+        else:
+            self._show_snackbar(f"Не удалось переключить на роль: {role_name}")
+        
+        self.page.update()
+
+    def _show_user_info(self, e=None):
+        """Show user info dialog with all roles and capabilities."""
+        name = f"{self._user_info.get('last_name', '')} {self._user_info.get('first_name', '')}".strip()
+        current_role = self.api.role or "unknown"
+        school_id = self.api.school_id
+        can_modify = self.api.can_modify_grades
+        admin_rights = self.api.has_school_admin_rights
+        
+        # Build role list with icons
+        available_roles = self.api.available_role_names
+        role_display_rows = []
+        for rname in available_roles:
+            rinfo = ROLE_DISPLAY.get(rname, {"label": rname, "icon": Icons.PERSON, "color": ft.Colors.GREY_600})
+            is_current = rname == current_role
+            can_mod = rname in GRADE_MODIFY_ROLES
+            role_display_rows.append(Row([
+                Icon(rinfo["icon"], size=16, color=rinfo["color"]),
+                Text(rinfo["label"], size=13,
+                     weight=FontWeight.W_700 if is_current else FontWeight.W_400,
+                     color=rinfo["color"] if is_current else ft.Colors.GREY_700),
+                Text(" (активна)" if is_current else "", size=11, color=ft.Colors.BLUE_600),
+                Container(expand=True),
+                Icon(Icons.EDIT if can_mod else Icons.LOCK_OUTLINED, size=12,
+                     color=ft.Colors.GREEN_600 if can_mod else ft.Colors.GREY_400),
+            ], spacing=6))
+        
+        # Modify indicator
+        modify_color = ft.Colors.GREEN_700 if can_modify else ft.Colors.RED_600
+        modify_text = "Можно менять оценки" if can_modify else "Только просмотр оценок"
+        modify_icon = Icons.EDIT if can_modify else Icons.LOCK
+        
+        # Admin indicator
+        admin_color = ft.Colors.PURPLE_700 if admin_rights else ft.Colors.GREY_500
+        admin_text = "Права админа школы" if admin_rights else "Нет прав админа"
+        
+        role_info = ROLE_DISPLAY.get(current_role, {"label": current_role, "icon": Icons.PERSON, "color": ft.Colors.GREY_600})
+        
+        self.page.dialog = AlertDialog(
+            title=Row([
+                self._make_user_avatar(self._user_info),
+                Container(width=10),
+                Column([
+                    Text(name if name else "Неизвестно", size=17, weight=FontWeight.W_700),
+                    Row([
+                        Icon(role_info["icon"], size=14, color=role_info["color"]),
+                        Text(role_info["label"], size=13, color=role_info["color"]),
+                    ], spacing=4),
+                ], spacing=2),
+            ], spacing=0),
+            content=Column([
+                Row([
+                    Icon(modify_icon, size=16, color=modify_color),
+                    Text(modify_text, size=14, color=modify_color, weight=FontWeight.W_600),
+                ], spacing=6),
+                Container(height=4),
+                Row([
+                    Icon(Icons.ADMIN_PANEL_SETTINGS, size=16, color=admin_color),
+                    Text(admin_text, size=13, color=admin_color),
+                ], spacing=6),
+                Container(height=4),
+                Row([
+                    Icon(Icons.LOCATION_ON, size=16, color=ft.Colors.GREY_600),
+                    Text(f"Школа ID: {school_id}", size=13, color=ft.Colors.GREY_600),
+                ], spacing=6),
+                Container(height=12),
+                Divider(),
+                Container(height=4),
+                Text("Все роли:", size=13, weight=FontWeight.W_600, color=ft.Colors.GREY_700),
+                *role_display_rows,
+            ], spacing=6, scroll=ScrollMode.AUTO),
+            actions=[
+                TextButton("Сменить роль", on_click=lambda _: self._close_dialog_and_switch_role()),
                 TextButton("OK", on_click=lambda _: self.page.dialog.close()),
             ],
         )
         self.page.dialog.open = True
-        self._log_message(f"Профиль: {name}, роль={role}, admin={admin_rights}, school={school_id}")
+        self._log_message(f"Профиль: {name}, роль={current_role}, modify={can_modify}, admin={admin_rights}, school={school_id}")
         self.page.update()
+
+    def _close_dialog_and_switch_role(self):
+        """Close profile dialog and open role switcher."""
+        if self.page.dialog:
+            self.page.dialog.open = False
+        self._show_role_switcher()
 
     def _on_nav_change(self, e):
         """Handle navigation bar change."""
@@ -1368,12 +1610,76 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _build_admin_page(self):
-        """School Admin page - extended teacher capabilities."""
+        """School Admin page - extended capabilities based on role."""
         self.admin_group_num = TextField(label="Номер (напр. '8')", width=120)
         self.admin_group_name = TextField(label="Название (напр. 'А')", width=120)
         self.admin_subject_name = TextField(label="Предмет", width=250)
         
         self.admin_results = Text("Выберите действие", size=14, color=ft.Colors.GREY_600)
+
+        # Role-based capabilities display
+        available_roles = self.api.available_role_names
+        has_admin = self.api.has_school_admin_rights
+        can_modify = self.api.can_modify_grades
+        
+        role_info = ROLE_DISPLAY.get(self.api.role, {"label": self.api.role, "icon": Icons.PERSON, "color": ft.Colors.GREY_600})
+        
+        capabilities_rows = []
+        # Show each available role with its capabilities
+        for rname in available_roles:
+            rinfo = ROLE_DISPLAY.get(rname, {"label": rname, "icon": Icons.PERSON, "color": ft.Colors.GREY_600})
+            is_grade_role = rname in GRADE_MODIFY_ROLES
+            is_admin_role = rname == "school_admin"
+            is_current = rname == self.api.role
+            
+            caps = []
+            if is_grade_role:
+                caps.append("оценки")
+            if is_admin_role:
+                caps.append("админ")
+            if not caps:
+                caps.append("просмотр")
+            
+            capabilities_rows.append(Row([
+                Icon(rinfo["icon"], size=16, color=rinfo["color"]),
+                Text(rinfo["label"], size=13, weight=FontWeight.W_700 if is_current else FontWeight.W_400,
+                     color=rinfo["color"] if is_current else ft.Colors.GREY_700),
+                Text("(активна)" if is_current else "", size=10, color=ft.Colors.BLUE_600),
+                Container(expand=True),
+                Text(", ".join(caps), size=11, color=ft.Colors.GREEN_600 if is_grade_role else ft.Colors.GREY_500),
+            ], spacing=4))
+        
+        # Admin-only controls (visible only if school_admin role exists)
+        admin_controls = Column([
+            Container(height=20),
+            Divider(),
+            Container(height=12),
+            Text("Управление классами", size=16, weight=FontWeight.W_600),
+            Container(height=8),
+            Row([
+                self.admin_group_num,
+                Container(width=8),
+                self.admin_group_name,
+                Container(width=16),
+                FilledButton(
+                    content=Row([Icon(Icons.ADD, size=16), Text("Добавить класс", size=14)]),
+                    on_click=lambda _: self._on_admin_add_group(),
+                ),
+            ], spacing=0),
+            Container(height=20),
+            Divider(),
+            Container(height=12),
+            Text("Управление предметами", size=16, weight=FontWeight.W_600),
+            Container(height=8),
+            Row([
+                self.admin_subject_name,
+                Container(width=16),
+                FilledButton(
+                    content=Row([Icon(Icons.ADD, size=16), Text("Добавить предмет", size=14)]),
+                    on_click=lambda _: self._on_admin_add_subject(),
+                ),
+            ], spacing=0),
+        ], visible=has_admin)
 
         self.admin_page = Column(
             scroll=ScrollMode.AUTO,
@@ -1387,36 +1693,23 @@ class EdonishAutoApp:
                                 Icon(Icons.ADMIN_PANEL_SETTINGS, size=24, color=ft.Colors.PURPLE_600),
                                 Text("Администрирование", size=20, weight=FontWeight.W_600),
                             ], spacing=10),
-                            Container(height=16),
-                            Text("Права: teacher + school_admin", size=14, color=ft.Colors.GREY_600),
-                            Container(height=20),
-                            Divider(),
                             Container(height=12),
-                            Text("Управление классами", size=16, weight=FontWeight.W_600),
-                            Container(height=8),
+                            # Current role info
                             Row([
-                                self.admin_group_num,
-                                Container(width=8),
-                                self.admin_group_name,
-                                Container(width=16),
-                                FilledButton(
-                                    content=Row([Icon(Icons.ADD, size=16), Text("Добавить класс", size=14)]),
-                                    on_click=lambda _: self._on_admin_add_group(),
-                                ),
-                            ], spacing=0),
-                            Container(height=20),
-                            Divider(),
-                            Container(height=12),
-                            Text("Управление предметами", size=16, weight=FontWeight.W_600),
+                                Icon(role_info["icon"], size=18, color=role_info["color"]),
+                                Text(f"Текущая роль: {role_info['label']}", size=14, weight=FontWeight.W_600, color=role_info["color"]),
+                                Container(width=12),
+                                Icon(Icons.EDIT if can_modify else Icons.LOCK, size=16,
+                                     color=ft.Colors.GREEN_600 if can_modify else ft.Colors.RED_400),
+                                Text("Можно менять оценки" if can_modify else "Только чтение", size=13,
+                                     color=ft.Colors.GREEN_600 if can_modify else ft.Colors.RED_400),
+                            ], spacing=4),
                             Container(height=8),
-                            Row([
-                                self.admin_subject_name,
-                                Container(width=16),
-                                FilledButton(
-                                    content=Row([Icon(Icons.ADD, size=16), Text("Добавить предмет", size=14)]),
-                                    on_click=lambda _: self._on_admin_add_subject(),
-                                ),
-                            ], spacing=0),
+                            # Available roles list
+                            Text("Ваши роли и права:", size=13, weight=FontWeight.W_600, color=ft.Colors.GREY_700),
+                            *capabilities_rows,
+                            # Admin controls (only if school_admin)
+                            admin_controls,
                             Container(height=20),
                             Divider(),
                             Container(height=12),
@@ -1604,13 +1897,17 @@ class EdonishAutoApp:
     def _on_login_success(self, user_info):
         """Handle successful login."""
         self._user_info = user_info
+        # Store all roles from API into user_info for display
+        self._user_info['role'] = self.api.role
+        self._user_info['roles'] = self.api.available_role_names
         self._build_dashboard_view(user_info)
         # Log user info for debugging
         name = f"{user_info.get('last_name', '')} {user_info.get('first_name', '')}".strip()
-        role = user_info.get('role', 'unknown')
-        roles_list = user_info.get('roles', [])
-        self._log_message(f"✅ Успешный вход: {name}, роль={role}, роли={roles_list}, admin_rights={self.api.has_school_admin_rights}")
-        self._log_message(f"  School ID: {self.api.school_id}, User Info: {user_info}")
+        role = self.api.role
+        roles_list = self.api.available_role_names
+        can_modify = self.api.can_modify_grades
+        self._log_message(f"Успешный вход: {name}, роль={role}, роли={roles_list}, can_modify={can_modify}")
+        self._log_message(f"  School ID: {self.api.school_id}, admin_rights={self.api.has_school_admin_rights}")
         self._load_initial_data()
 
     def _on_login_error(self, error_msg):

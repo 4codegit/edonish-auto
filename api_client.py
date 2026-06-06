@@ -29,6 +29,8 @@ class EdonishAPI:
         self.role: Optional[str] = None
         self.role_prefix: Optional[str] = None
         self.uid: Optional[str] = None
+        self.all_roles: List[Dict] = []  # All roles from header/info: [{name, schoolId, ...}, ...]
+        self._roles_raw: List[Dict] = []  # Raw roles data from API
 
     @property
     def _headers(self) -> Dict[str, str]:
@@ -83,7 +85,11 @@ class EdonishAPI:
             raise AuthenticationError(f"Network error during login: {e}")
 
     def _resolve_role_and_school(self):
-        """Determine user role and school ID from header info."""
+        """Determine user role and school ID from header info.
+        
+        Stores ALL available roles so the user can switch between them.
+        By default, picks the most capable role that allows grade modification.
+        """
         try:
             resp = self.session.get(
                 API_HEADER_INFO,
@@ -95,35 +101,103 @@ class EdonishAPI:
             roles_data = resp.json()
 
             if isinstance(roles_data, list) and len(roles_data) > 0:
-                primary = roles_data[0]
-                self.school_id = primary.get("schoolId")
-                self.role = primary.get("name", "teacher")
-                self.role_prefix = API_PREFIXES.get(self.role, "/teacher/v1")
+                # Store all roles
+                self._roles_raw = roles_data
+                self.all_roles = [
+                    {"name": r.get("name", "unknown"), "schoolId": r.get("schoolId")}
+                    for r in roles_data
+                ]
 
-                # If user has multiple roles, prefer teacher or classroom-teacher
-                for r in roles_data:
-                    if r.get("name") in ("teacher", "classroom-teacher"):
-                        self.role = r.get("name")
-                        self.role_prefix = API_PREFIXES.get(self.role, "/teacher/v1")
-                        self.school_id = r.get("schoolId", self.school_id)
+                # Priority order: school_admin > director > headteacher > classroom-teacher > teacher
+                # Pick the most capable role that supports grade operations
+                role_priority = [
+                    "school_admin",
+                    "director",
+                    "headteacher",
+                    "chief_curator",
+                    "regional_curator",
+                    "classroom-teacher",
+                    "teacher",
+                ]
+                best_role = None
+                for candidate in role_priority:
+                    for r in roles_data:
+                        if r.get("name") == candidate:
+                            best_role = r
+                            break
+                    if best_role:
                         break
+
+                if best_role:
+                    self.role = best_role.get("name", "teacher")
+                    self.role_prefix = API_PREFIXES.get(self.role, "/teacher/v1")
+                    self.school_id = best_role.get("schoolId", self.school_id)
+                else:
+                    # Fallback: use first role
+                    primary = roles_data[0]
+                    self.school_id = primary.get("schoolId")
+                    self.role = primary.get("name", "teacher")
+                    self.role_prefix = API_PREFIXES.get(self.role, "/teacher/v1")
             else:
                 self.role = "teacher"
                 self.role_prefix = API_PREFIXES["teacher"]
+                self.all_roles = [{"name": "teacher", "schoolId": None}]
+                self._roles_raw = []
 
         except Exception as e:
             logger.warning(f"Could not resolve role: {e}")
             self.role = "teacher"
             self.role_prefix = API_PREFIXES["teacher"]
+            self.all_roles = [{"name": "teacher", "schoolId": None}]
+            self._roles_raw = []
+
+    def switch_role(self, role_name: str) -> bool:
+        """Switch the active role to a different one from the user's available roles.
+        
+        Returns True if the role was found and switched, False otherwise.
+        """
+        for r in self._roles_raw:
+            if r.get("name") == role_name:
+                self.role = role_name
+                self.role_prefix = API_PREFIXES.get(role_name, "/teacher/v1")
+                school_id = r.get("schoolId")
+                if school_id:
+                    self.school_id = school_id
+                logger.info(f"Switched role to: {role_name} (prefix: {self.role_prefix}, school: {self.school_id})")
+                return True
+        logger.warning(f"Role '{role_name}' not found in available roles: {[r.get('name') for r in self._roles_raw]}")
+        return False
 
     @property
     def has_school_admin_rights(self) -> bool:
-        """Check if user has school_admin capabilities (granted to teachers, classroom-teachers, or school_admins).
+        """Check if user has school_admin capabilities.
         
-        Returns True if user has at least one of the required roles.
+        Returns True if user has school_admin role (can access /school_admin/v1 endpoints).
         """
-        # Check if user has any of the required roles
-        return self.role in ("teacher", "classroom-teacher", "school_admin")
+        return self.role == "school_admin" or any(
+            r.get("name") == "school_admin" for r in self.all_roles
+        )
+
+    @property
+    def can_modify_grades(self) -> bool:
+        """Check if the current role allows modifying grades.
+        
+        Grade modification is allowed if the user has at least one of:
+        teacher, classroom-teacher, school_admin
+        
+        Returns True if any of these roles is present in the user's available roles.
+        """
+        grade_roles = {"teacher", "classroom-teacher", "school_admin"}
+        # Check if current role is one of the grade-modification roles
+        if self.role in grade_roles:
+            return True
+        # Check if ANY available role is a grade-modification role
+        return any(r.get("name") in grade_roles for r in self.all_roles)
+
+    @property
+    def available_role_names(self) -> List[str]:
+        """Return list of all available role names for the current user."""
+        return [r.get("name", "unknown") for r in self.all_roles]
 
     def _refresh_auth(self) -> bool:
         """Refresh the JWT token using the refresh token."""
