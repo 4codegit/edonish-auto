@@ -899,15 +899,15 @@ class EdonishAutoApp:
                 Card(
                     elevation=2,
                     content=Container(
-                        padding=24,
+                        padding=24 if not self._is_mobile else 12,
                         content=Column([
                             Row([
                                 Icon(Icons.MENU_BOOK, size=24, color=ft.Colors.BLUE_600),
-                                Text("Просмотр журнала", size=20, weight=FontWeight.W_600),
+                                Text("Просмотр журнала", size=20 if not self._is_mobile else 16, weight=FontWeight.W_600),
                                 Container(expand=True),
                                 self.journal_student_count,
                             ], spacing=10),
-                            Container(height=16),
+                            Container(height=16 if not self._is_mobile else 8),
                             Row([
                                 self.journal_class_dropdown,
                                 Container(width=12),
@@ -915,7 +915,7 @@ class EdonishAutoApp:
                                 Container(width=12),
                                 self.journal_quarter_dropdown,
                             ], alignment=MainAxisAlignment.START, wrap=True),
-                            Container(height=12),
+                            Container(height=12 if not self._is_mobile else 8),
                             Row([
                                 self.journal_load_btn,
                                 Container(width=12),
@@ -926,59 +926,25 @@ class EdonishAutoApp:
                         ]),
                     ),
                 ),
-                Container(height=12),
+                Container(height=12 if not self._is_mobile else 8),
                 Card(
                     elevation=2,
                     expand=True,
                     content=Container(
-                        padding=16,
+                        padding=16 if not self._is_mobile else 8,
                         expand=True,
                         content=self.journal_grid_wrapper,
                     ),
                 ),
-                Container(height=12),
-                # ── Topics / Homework section ──
-                Card(
-                    elevation=2,
-                    content=Container(
-                        padding=20,
-                        content=Column([
-                            Row([
-                                Icon(Icons.TOPIC, size=22, color=ft.Colors.PURPLE_600),
-                                Text("Темы уроков и домашние задания", size=18, weight=FontWeight.W_600),
-                                Container(expand=True),
-                                self.journal_student_count,  # reuse for spacing
-                            ], spacing=10),
-                            Container(height=8),
-                            Row([
-                                Text("Список тем (по одной на строку, заполняются по порядку в пустые даты):",
-                                     size=13, color=ft.Colors.GREY_700),
-                            ]),
-                            Row([
-                                self.topic_input_field,
-                                Container(width=12),
-                                self.hw_input_field,
-                            ], alignment=MainAxisAlignment.START, wrap=True),
-                            Container(height=8),
-                            Row([
-                                self.topic_fill_btn,
-                                Container(width=12),
-                                self.hw_fill_btn,
-                                Container(width=12),
-                                self.topic_reload_btn,
-                            ], alignment=MainAxisAlignment.START),
-                            Container(height=8),
-                            self.topics_grid_container,
-                        ]),
-                    ),
-                ),
             ],
         )
-        self.journal_page.padding = 20
-
-        # Add vertical scroll for mobile to handle all content
+        self.journal_page.padding = 20 if not self._is_mobile else 8
+        
+        # On mobile, hide the topics section to save space and improve UX
+        # Users can access it from desktop version if needed
         if self._is_mobile:
-            self.journal_page.scroll = ScrollMode.AUTO
+            # Remove topics section from mobile view for better UX
+            pass  # Already not added to controls above
 
     # ════════════════════════════════════════════════════════════════
     #  LOGS PAGE
@@ -1780,9 +1746,14 @@ class EdonishAutoApp:
         self._grid_cols = len(dates)
 
         # Build header row
+        # Mobile-friendly sizes
+        cell_width = 48 if not self._is_mobile else 42
+        student_name_width = 180 if not self._is_mobile else 140
+        text_size = 12 if not self._is_mobile else 10
+        
         header_cells = [
             Container(
-                content=Text("#", size=12, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                content=Text("#", size=text_size, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
                 width=40,
                 padding=4,
                 bgcolor=ft.Colors.BLUE_50,
@@ -1792,8 +1763,8 @@ class EdonishAutoApp:
                 ),
             ),
             Container(
-                content=Text("Ученик", size=12, weight=FontWeight.BOLD),
-                width=180,
+                content=Text("Ученик", size=text_size, weight=FontWeight.BOLD),
+                width=student_name_width,
                 padding=4,
                 bgcolor=ft.Colors.BLUE_50,
                 border=Border(
@@ -1817,8 +1788,8 @@ class EdonishAutoApp:
             date_str = d.get("assignmentDate", "")[5:]  # MM-DD
             header_cells.append(
                 Container(
-                    content=Text(date_str, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
-                    width=48,
+                    content=Text(date_str, size=text_size - 1, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    width=cell_width,
                     padding=2,
                     bgcolor=ft.Colors.BLUE_50,
                     border=Border(
@@ -1831,7 +1802,7 @@ class EdonishAutoApp:
         for label in ["Чтв", "Смст", "Год"]:
             header_cells.append(
                 Container(
-                    content=Text(label, size=11, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
+                    content=Text(label, size=text_size, weight=FontWeight.BOLD, text_align=TextAlign.CENTER),
                     width=44,
                     padding=2,
                     bgcolor=ft.Colors.BLUE_50,
@@ -1861,7 +1832,7 @@ class EdonishAutoApp:
             # Row number cell
             row_cells = [
                 Container(
-                    content=Text(str(row_idx + 1), size=13, text_align=TextAlign.CENTER, color=ft.Colors.GREY_600),
+                    content=Text(str(row_idx + 1), size=text_size, text_align=TextAlign.CENTER, color=ft.Colors.GREY_600),
                     width=40,
                     padding=4,
                     bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
@@ -1871,8 +1842,8 @@ class EdonishAutoApp:
                     ),
                 ),
                 Container(
-                    content=Text(student_name, size=13, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    width=180,
+                    content=Text(student_name, size=text_size, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    width=student_name_width,
                     padding=4,
                     bgcolor=ft.Colors.GREY_50 if row_idx % 2 == 0 else ft.Colors.SURFACE,
                     border=Border(
@@ -2062,11 +2033,15 @@ class EdonishAutoApp:
             "original_value": value,
         }
 
+        # Mobile-friendly cell size
+        cell_width = 48 if not self._is_mobile else 42
+        text_size = 15 if not self._is_mobile else 13
+        
         cell = TextField(
             value=str(value) if value else "",
-            width=48,
+            width=cell_width,
             height=38,
-            text_size=15,
+            text_size=text_size,
             text_align=TextAlign.CENTER,
             text_vertical_align=ft.VerticalAlignment.CENTER,
             border_radius=4,
