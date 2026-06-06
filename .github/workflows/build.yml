@@ -75,8 +75,10 @@ jobs:
         run: |
           choco install nsis -y
           $env:Path = "C:\Program Files (x86)\NSIS;$env:Path"
+          # Update version in installer.nsi to match APP_VERSION
+          (Get-Content installer.nsi) -replace '!define APPVERSION ".*"', "!define APPVERSION `"${{ env.APP_VERSION }}`"" | Set-Content installer.nsi
           makensis /V4 installer.nsi
-          copy "edonish-auto-${{ env.APP_VERSION }}-setup.exe" dist\windows\
+          copy "edonish-auto-*-setup.exe" dist\windows\
         shell: pwsh
 
       - name: Upload Windows artifacts
