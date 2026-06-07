@@ -63,11 +63,13 @@ jobs:
       - name: Pre-cache Flet client (with retry)
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Continue"
           $maxRetries = 5
           $delay = 30
           for ($i = 1; $i -le $maxRetries; $i++) {
             Write-Host "Attempt $i of $maxRetries: Caching Flet client..."
-            python -c "import flet_desktop; flet_desktop.ensure_client_cached()"
+            $output = & python -c "import flet_desktop; flet_desktop.ensure_client_cached()" 2>&1
+            Write-Host $output
             if ($LASTEXITCODE -eq 0) {
               Write-Host "Flet client cached successfully!"
               break
