@@ -3283,31 +3283,24 @@ class EdonishAutoApp:
         threading.Thread(target=do_delete, daemon=True).start()
 
     def _on_random_grade_for_student(self, row: int):
-        """Add a random grade for a specific student in the first empty date cell."""
+        """Fill ALL empty date cells in the row with random grades."""
         if not self._journal_loaded:
             return
 
-        # Find the first empty cell for this student (row)
-        empty_col = None
+        include_na = self.na_grade_check.value if hasattr(self, 'na_grade_check') else True
+        filled = 0
+
         for col in range(self._grid_cols):
             data = self._grade_data.get((row, col))
             if data and not data.get("current_value"):
-                empty_col = col
-                break
+                grade = weighted_random_grade(include_na=include_na)
+                self._set_cell_grade(row, col, grade)
+                filled += 1
 
-        if empty_col is None:
-            # All cells filled — find the last cell and overwrite it
-            # Use the last date column
-            last_col = self._grid_cols - 1
-            if last_col >= 0:
-                empty_col = last_col
-            else:
-                self._show_snackbar("Нет дат для оценки")
-                return
-
-        include_na = self.na_grade_check.value if hasattr(self, 'na_grade_check') else True
-        grade = weighted_random_grade(include_na=include_na)
-        self._set_cell_grade(row, empty_col, grade)
+        if filled == 0:
+            self._show_snackbar("Все ячейки уже заполнены")
+        else:
+            self._show_snackbar(f"🎲 Заполнено {filled} ячеек рандомом")
 
     def _on_set_quarter_mark(self, row: int):
         """Set quarter mark for a student as ceil(average of their subject marks).
