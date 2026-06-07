@@ -66,21 +66,20 @@ jobs:
           $maxRetries = 5
           $delay = 30
           for ($i = 1; $i -le $maxRetries; $i++) {
-            try {
-              Write-Host "Attempt $i of $maxRetries: Caching Flet client..."
-              python -c "import flet_desktop; flet_desktop.ensure_client_cached()"
+            Write-Host "Attempt $i of $maxRetries: Caching Flet client..."
+            python -c "import flet_desktop; flet_desktop.ensure_client_cached()"
+            if ($LASTEXITCODE -eq 0) {
               Write-Host "Flet client cached successfully!"
               break
-            } catch {
-              Write-Host "Attempt $i failed: $_"
-              if ($i -lt $maxRetries) {
-                Write-Host "Retrying in $delay seconds..."
-                Start-Sleep -Seconds $delay
-                $delay = $delay * 2
-              } else {
-                Write-Host "All $maxRetries attempts failed!"
-                exit 1
-              }
+            }
+            Write-Host "Attempt $i failed (exit code: $LASTEXITCODE)"
+            if ($i -lt $maxRetries) {
+              Write-Host "Retrying in $delay seconds..."
+              Start-Sleep -Seconds $delay
+              $delay = $delay * 2
+            } else {
+              Write-Host "All $maxRetries attempts failed!"
+              exit 1
             }
           }
 
