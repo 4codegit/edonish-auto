@@ -450,7 +450,7 @@ class EdonishAutoApp:
                     Container(expand=True),
                     Text("Ctrl+S: сохранить | Del: удалить | Стрелки: навигация | F5: анализ", size=11, color=ft.Colors.GREY_400),
                 ]),
-                padding=(10, 5, 10, 5),
+                padding=5,
                 bgcolor=ft.Colors.GREY_100,
                 border=Border(top=BorderSide(1, ft.Colors.GREY_300)),
                 left=0, right=0, bottom=0,
@@ -1027,7 +1027,7 @@ class EdonishAutoApp:
                     color=ft.Colors.ORANGE_900,
                 ),
             ], spacing=8),
-            padding=(12, 8, 12, 8),
+            padding=8,
             bgcolor=ft.Colors.ORANGE_50,
             border=Border(
                 left=BorderSide(3, ft.Colors.ORANGE_600),
@@ -2998,7 +2998,7 @@ class EdonishAutoApp:
             border_radius=4,
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.RED_400 if is_na else ft.Colors.BLUE_600,
-            content_padding=(2, 4, 2, 4),
+            content_padding=4,
             bgcolor=cell_bgcolor,
             input_filter=ft.NumbersOnlyInputFilter() if not is_na else None,
             max_length=3 if is_na else 2,  # "Н/А" is 3 chars
