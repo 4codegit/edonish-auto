@@ -90,9 +90,10 @@ LANG_RU = 2  # Русский
 LANG_EN = 3  # English
 
 # Grade settings
-MIN_GRADE = 3
+MIN_GRADE = 5
 MAX_GRADE = 10
-DEFAULT_GRADE_RANGE = (3, 10)
+MAX_GRADE_ALLOW = 11  # Allow manual entry of 11 but not in random
+DEFAULT_GRADE_RANGE = (5, 10)
 
 # Worker settings
 DEFAULT_WORKERS = 4

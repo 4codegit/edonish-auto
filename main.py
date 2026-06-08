@@ -70,7 +70,7 @@ from flet import (
 )
 
 from config import (
-    APP_NAME, APP_VERSION, MIN_GRADE, MAX_GRADE, DEFAULT_WORKERS,
+    APP_NAME, APP_VERSION, MIN_GRADE, MAX_GRADE, MAX_GRADE_ALLOW, DEFAULT_WORKERS,
     COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING,
     SESSION_FILE, _get_app_dir,
 )
@@ -306,7 +306,7 @@ class EdonishAutoApp:
                     val = cell.value
                     if val and val.strip() and val.strip().isdigit():
                         grade = int(val.strip())
-                        if MIN_GRADE <= grade <= MAX_GRADE:
+                        if MIN_GRADE <= grade <= MAX_GRADE_ALLOW:
                             self._set_cell_grade(row, col, grade)
                 return
 
@@ -373,11 +373,6 @@ class EdonishAutoApp:
             center_title=False,
             bgcolor=ft.Colors.SURFACE,
             actions=[
-                IconButton(
-                    icon=Icons.SWAP_HORIZ,
-                    tooltip="Сменить роль",
-                    on_click=self._show_role_switcher,
-                ),
                 IconButton(
                     icon=Icons.PERSON,
                     tooltip="Профиль",
@@ -720,7 +715,6 @@ class EdonishAutoApp:
                 *role_display_rows,
             ], spacing=6, scroll=ScrollMode.AUTO),
             actions=[
-                TextButton("Сменить роль", on_click=lambda _: self._close_dialog_and_switch_role()),
                 TextButton("OK", on_click=lambda _: self.page.dialog.close()),
             ],
         )
@@ -1757,22 +1751,6 @@ class EdonishAutoApp:
                             *capabilities_rows,
                             # Admin controls (only if school_admin)
                             admin_controls,
-                            Container(height=20),
-                            Divider(),
-                            Container(height=12),
-                            Text("Просмотр данных", size=16, weight=FontWeight.W_600),
-                            Container(height=8),
-                            Row([
-                                OutlinedButton(
-                                    content=Row([Icon(Icons.GROUP, size=16), Text("Классы", size=14)]),
-                                    on_click=lambda _: self._on_admin_view_groups(),
-                                ),
-                                Container(width=12),
-                                OutlinedButton(
-                                    content=Row([Icon(Icons.LIST, size=16), Text("Предметы", size=14)]),
-                                    on_click=lambda _: self._on_admin_view_subjects(),
-                                ),
-                            ], spacing=0),
                         ]),
                     ),
                 ),
@@ -2837,11 +2815,11 @@ class EdonishAutoApp:
                     sn = sn.split("/")[0]
                 if sn and sn.isdigit():
                     v = int(sn)
-                    if MIN_GRADE <= v <= MAX_GRADE:
+                    if MIN_GRADE <= v <= MAX_GRADE_ALLOW:
                         grade_values.append(v)
             if grade_values:
                 avg = sum(grade_values) / len(grade_values)
-                ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                ceil_grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE_ALLOW)
                 quarter_tooltip = f"Ср. балл: {avg:.2f} → Чтв: {ceil_grade} (клик: запрос с edonish + ceil)"
             else:
                 ceil_grade = None
@@ -2912,7 +2890,7 @@ class EdonishAutoApp:
         # Help text
         student_rows.append(Container(height=4))
         student_rows.append(Text(
-            "Стрелки: навигация | Цифра 3-10: оценка | Н/А: не аттестован | Delete: удалить | 🎲: рандом | Чтв: ceil(ср.)",
+            "Стрелки: навигация | Цифра 5-11: оценка | Н/А: не аттестован | Delete: удалить | 🎲: рандом | Чтв: ceil(ср.)",
             size=11, color=ft.Colors.GREY_400,
         ))
 
@@ -3053,26 +3031,26 @@ class EdonishAutoApp:
                 pass
             return
         grade = int(digit)
-        if MIN_GRADE <= grade <= MAX_GRADE:
+        if MIN_GRADE <= grade <= MAX_GRADE_ALLOW:
             # Valid grade — submit it after short delay to allow full number entry
-            if grade == 1 and MAX_GRADE >= 10:
-                # Could be "10" — wait for next digit
+            if grade == 1 and MAX_GRADE_ALLOW >= 10:
+                # Could be "10" or "11" — wait for next digit
                 return
             self._set_cell_grade(row, col, grade)
-        elif grade > MAX_GRADE:
+        elif grade > MAX_GRADE_ALLOW:
             # Too high — reject
             e.control.value = ""
-            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE} или Н/А")
+            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE_ALLOW} или Н/А")
             try:
                 self.page.update()
             except Exception:
                 pass
         elif grade < MIN_GRADE and digit == "1":
-            # Could be start of "10" — wait
+            # Could be start of "10" or "11" — wait
             pass
         elif grade < MIN_GRADE:
             e.control.value = ""
-            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE} или Н/А")
+            self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE_ALLOW} или Н/А")
             try:
                 self.page.update()
             except Exception:
@@ -3093,10 +3071,10 @@ class EdonishAutoApp:
         
         if digit.isdigit():
             grade = int(digit)
-            if MIN_GRADE <= grade <= MAX_GRADE:
+            if MIN_GRADE <= grade <= MAX_GRADE_ALLOW:
                 self._set_cell_grade(row, col, grade)
             else:
-                self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE} или Н/А")
+                self._show_snackbar(f"Оценка должна быть от {MIN_GRADE} до {MAX_GRADE_ALLOW} или Н/А")
                 e.control.value = self._grade_data[(row, col)].get("current_value", "")
                 self.page.update()
 
@@ -3352,7 +3330,7 @@ class EdonishAutoApp:
                         sn = numerator
                     if sn and sn.isdigit():
                         v = int(sn)
-                        if MIN_GRADE <= v <= MAX_GRADE:
+                        if MIN_GRADE <= v <= MAX_GRADE_ALLOW:
                             grade_values.append(v)
 
                 if not grade_values:
@@ -3361,7 +3339,7 @@ class EdonishAutoApp:
 
                 # Step 4: Calculate ceil(average)
                 avg = sum(grade_values) / len(grade_values)
-                grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE)
+                grade = min(max(int(math.ceil(avg)), MIN_GRADE), MAX_GRADE_ALLOW)
                 self._log_message(
                     f"Четвертная (строка {row + 1}): оценки={grade_values}, "
                     f"ср.={avg:.2f}, ceil={grade}"
