@@ -450,7 +450,7 @@ class EdonishAutoApp:
                     Container(expand=True),
                     Text("Ctrl+S: сохранить | Del: удалить | Стрелки: навигация | F5: анализ", size=11, color=ft.Colors.GREY_400),
                 ]),
-                padding=ft.controls.padding.Padding(left=10, top=5, right=10, bottom=5),
+                padding=(10, 5, 10, 5),
                 bgcolor=ft.Colors.GREY_100,
                 border=Border(top=BorderSide(1, ft.Colors.GREY_300)),
                 left=0, right=0, bottom=0,
@@ -1027,7 +1027,7 @@ class EdonishAutoApp:
                     color=ft.Colors.ORANGE_900,
                 ),
             ], spacing=8),
-            padding=ft.controls.padding.Padding(left=12, top=8, right=12, bottom=8),
+            padding=(12, 8, 12, 8),
             bgcolor=ft.Colors.ORANGE_50,
             border=Border(
                 left=BorderSide(3, ft.Colors.ORANGE_600),
@@ -1618,7 +1618,7 @@ class EdonishAutoApp:
                 border=Border(
                     bottom=BorderSide(1, ft.Colors.GREY_200)
                 ),
-                border_radius=BorderRadius.all(8),
+                border_radius=8,
             ))
         
         total = len(dates)
@@ -1811,49 +1811,6 @@ class EdonishAutoApp:
                 self.admin_results.color = ft.Colors.RED_700
             self.page.run_thread(self._safe_update)
         threading.Thread(target=do_add, daemon=True).start()
-
-    def _on_admin_view_quarters(self):
-        """View all quarters."""
-        self.admin_results.value = "Загрузка..."
-        self.page.update()
-        def load():
-            quarters = self.api.get_quarters()
-            lines = [f"Всего четвертей: {len(quarters)}\n"]
-            for q in quarters[:20]:
-                lines.append(f"  • {q.get('name', '')}")
-            self.admin_results.value = "\n".join(lines)
-            self.admin_results.color = ft.Colors.GREY_800
-            self.page.run_thread(self._safe_update)
-        threading.Thread(target=load, daemon=True).start()
-
-    def _on_admin_view_groups(self):
-        """View all groups."""
-        self.admin_results.value = "Загрузка..."
-        self.page.update()
-        def load():
-            groups = self.api.get_groups()
-            lines = [f"Всего классов: {len(groups)}\n"]
-            for g in groups[:30]:
-                name = f"{g.get('number', '')}{g.get('name', '')}"
-                lines.append(f"  • {name}")
-            self.admin_results.value = "\n".join(lines)
-            self.admin_results.color = ft.Colors.GREY_800
-            self.page.run_thread(self._safe_update)
-        threading.Thread(target=load, daemon=True).start()
-
-    def _on_admin_view_subjects(self):
-        """View all subjects."""
-        self.admin_results.value = "Загрузка..."
-        self.page.update()
-        def load():
-            subjects = self.api.get_all_school_subjects()
-            lines = [f"Всего предметов: {len(subjects)}\n"]
-            for s in subjects[:30]:
-                lines.append(f"  • {s.get('subjectName', s.get('name', ''))}")
-            self.admin_results.value = "\n".join(lines)
-            self.admin_results.color = ft.Colors.GREY_800
-            self.page.run_thread(self._safe_update)
-        threading.Thread(target=load, daemon=True).start()
 
     # ════════════════════════════════════════════════════════════════
     #  SESSION PERSISTENCE
@@ -2994,7 +2951,7 @@ class EdonishAutoApp:
             border_radius=4,
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.RED_400 if is_na else ft.Colors.BLUE_600,
-            content_padding=ft.controls.padding.Padding(left=2, right=2, top=4, bottom=4),
+            content_padding=(2, 4, 2, 4),
             bgcolor=cell_bgcolor,
             input_filter=ft.NumbersOnlyInputFilter() if not is_na else None,
             max_length=3 if is_na else 2,  # "Н/А" is 3 chars
