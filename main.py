@@ -1265,11 +1265,45 @@ class EdonishAutoApp:
     # ════════════════════════════════════════════════════════════════
 
     def _build_logs_page(self):
-        """Logs viewer page."""
+        """Logs viewer page — with copyable text."""
+        # Use a read-only multiline TextField for copyable log text
+        self.logs_text_field = TextField(
+            value="",
+            multiline=True,
+            read_only=True,
+            expand=True,
+            min_lines=20,
+            max_lines=None,
+            text_size=12,
+            font_family="Roboto Mono",
+            border_color=ft.Colors.TRANSPARENT,
+            focused_border_color=ft.Colors.BLUE_200,
+            cursor_color=ft.Colors.TRANSPARENT,
+            cursor_width=0,
+            bgcolor=ft.Colors.GREY_50,
+            scroll_padding=10,
+            hint_text="Логи появятся здесь...",
+        )
+        # Store raw log lines for appending
+        self._logs_lines = []
+
+        # Also keep colored Column for visual presentation
         self.logs_list = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
             spacing=2,
+        )
+
+        # Tab selector: visual (colored) vs text (copyable)
+        self._logs_mode = "visual"  # "visual" or "text"
+
+        self._logs_visual_container = Container(
+            content=self.logs_list,
+            expand=True,
+        )
+        self._logs_text_container = Container(
+            content=self.logs_text_field,
+            expand=True,
         )
 
         clear_btn = OutlinedButton(
@@ -1283,6 +1317,28 @@ class EdonishAutoApp:
             on_click=lambda _: self._clear_logs(),
         )
 
+        copy_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.CONTENT_COPY, size=16),
+                ft.Text("Копировать", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+            ),
+            on_click=lambda _: self._copy_logs(),
+        )
+
+        toggle_btn = OutlinedButton(
+            content=ft.Row([
+                ft.Icon(Icons.SWAP_HORIZ, size=16),
+                ft.Text("Текст/Визуал", size=14),
+            ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+            style=ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+            ),
+            on_click=lambda _: self._toggle_logs_mode(),
+        )
+
         self.logs_page = Column(
             scroll=ScrollMode.AUTO,
             expand=True,
@@ -1291,6 +1347,8 @@ class EdonishAutoApp:
                     Icon(Icons.TERMINAL, size=24, color=ft.Colors.BLUE_600),
                     Text("Логи", size=20, weight=FontWeight.W_600),
                     Container(expand=True),
+                    toggle_btn,
+                    copy_btn,
                     clear_btn,
                 ], spacing=10),
                 Container(height=12),
@@ -1300,7 +1358,7 @@ class EdonishAutoApp:
                     content=Container(
                         padding=16,
                         expand=True,
-                        content=self.logs_list,
+                        content=self._logs_visual_container,
                     ),
                 ),
             ],
@@ -1555,9 +1613,11 @@ class EdonishAutoApp:
         # Find group_id and subject_id
         group_id = None
         subject_id = None
+        group_quarters = None  # Group-specific quarters (qpropId differs per group)
         for g in self.groups_data:
             if g["name"] == class_name:
                 group_id = g["id"]
+                group_quarters = g.get("quarters")  # May be None if not enriched yet
                 break
         for s in self.teacher_subjects:
             if s["subjectName"] == subject_name:
@@ -1571,7 +1631,22 @@ class EdonishAutoApp:
             return
 
         # Get all quarters for the selected semester
+        # Priority: use group-specific quarters (correct qpropId per group)
+        # Fallback: use global quarters_data
         semester_quarters = self._get_selected_semester_quarters()
+        if group_quarters:
+            # Use group-specific quarter IDs — match by name/index
+            semester_label = self.topics_semester_dropdown.value or "?"
+            if len(group_quarters) >= 4:
+                if "1 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[0], group_quarters[1]]
+                elif "2 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[2], group_quarters[3]]
+                else:
+                    semester_quarters = list(group_quarters)
+            elif group_quarters:
+                semester_quarters = list(group_quarters)
+            self._log_message(f"Используются group-specific четверти для класса '{class_name}': {len(semester_quarters)} четв.")
         semester_label = self.topics_semester_dropdown.value or "?"
         self._log_message(f"Период: {semester_label}, четвертей: {len(semester_quarters)}, quarters_data: {len(self.quarters_data)}")
         
@@ -1660,9 +1735,11 @@ class EdonishAutoApp:
         # Find group_id and subject_id
         group_id = None
         subject_id = None
+        group_quarters = None
         for g in self.groups_data:
             if g["name"] == class_name:
                 group_id = g["id"]
+                group_quarters = g.get("quarters")
                 break
         for s in self.teacher_subjects:
             if s["subjectName"] == subject_name:
@@ -1675,6 +1752,17 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        # Use group-specific quarters if available (correct qpropId per group)
+        if group_quarters:
+            if len(group_quarters) >= 4:
+                if "1 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[0], group_quarters[1]]
+                elif "2 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[2], group_quarters[3]]
+                else:
+                    semester_quarters = list(group_quarters)
+            elif group_quarters:
+                semester_quarters = list(group_quarters)
         
         if not semester_quarters:
             self._show_snackbar("Нет четвертей для выбранного периода! Выберите другой период.")
@@ -1763,9 +1851,11 @@ class EdonishAutoApp:
         # Find group_id and subject_id
         group_id = None
         subject_id = None
+        group_quarters = None
         for g in self.groups_data:
             if g["name"] == class_name:
                 group_id = g["id"]
+                group_quarters = g.get("quarters")
                 break
         for s in self.teacher_subjects:
             if s["subjectName"] == subject_name:
@@ -1778,6 +1868,17 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        # Use group-specific quarters if available (correct qpropId per group)
+        if group_quarters:
+            if len(group_quarters) >= 4:
+                if "1 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[0], group_quarters[1]]
+                elif "2 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[2], group_quarters[3]]
+                else:
+                    semester_quarters = list(group_quarters)
+            elif group_quarters:
+                semester_quarters = list(group_quarters)
         
         if not semester_quarters:
             self._show_snackbar("Нет четвертей для выбранного периода!")
@@ -1866,9 +1967,11 @@ class EdonishAutoApp:
         # Find group_id and subject_id
         group_id = None
         subject_id = None
+        group_quarters = None
         for g in self.groups_data:
             if g["name"] == class_name:
                 group_id = g["id"]
+                group_quarters = g.get("quarters")
                 break
         for s in self.teacher_subjects:
             if s["subjectName"] == subject_name:
@@ -1881,6 +1984,17 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        # Use group-specific quarters if available (correct qpropId per group)
+        if group_quarters:
+            if len(group_quarters) >= 4:
+                if "1 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[0], group_quarters[1]]
+                elif "2 полугодие" in semester_label:
+                    semester_quarters = [group_quarters[2], group_quarters[3]]
+                else:
+                    semester_quarters = list(group_quarters)
+            elif group_quarters:
+                semester_quarters = list(group_quarters)
         
         if not semester_quarters:
             self._show_snackbar("Нет четвертей для выбранного периода!")
@@ -3158,8 +3272,11 @@ class EdonishAutoApp:
                 mark_info = marks_by_date.get(date_id)
                 # Extract grade from shortName — filter out fractional format like "1/2", "0/2"
                 mark_value_raw = (mark_info.get("shortName") or "") if mark_info else ""
+                # Get raw mark value (0 = Н/А) for correct Н/А detection
+                mark_raw = (mark_info.get("mark") if mark_info else None)
                 # Parse grade: fractional "X/Y" -> show numerator only (0 -> "Н/А", 1+ -> number)
-                mark_value = self._parse_grade_display(mark_value_raw)
+                # Also pass mark_value so "1/2" (Н/А mark_type_id=1) is correctly identified
+                mark_value = self._parse_grade_display(mark_value_raw, mark_value=mark_raw)
                 mark_id = mark_info.get("assignmentMarkId", "") if mark_info else ""
                 qprop_id = d.get("quarterPropertyId", self._current_journal_params.get("qprop_id", 0))
                 full_date = (d.get("assignmentDate") or "")[:10]
@@ -3190,8 +3307,9 @@ class EdonishAutoApp:
             quarter_mark_id = ""
             if quarter_mark_list and len(quarter_mark_list) > 0:
                 quarter_mark_val_raw = quarter_mark_list[0].get("shortName") or ""
+                quarter_mark_raw = quarter_mark_list[0].get("mark")
                 # Parse grade: filter fractional format, convert 0 -> "Н/А"
-                quarter_mark_val = self._parse_grade_display(quarter_mark_val_raw)
+                quarter_mark_val = self._parse_grade_display(quarter_mark_val_raw, mark_value=quarter_mark_raw)
                 quarter_mark_id = quarter_mark_list[0].get("quarterMarkId", "") or quarter_mark_list[0].get("assignmentMarkId", "")
 
             # Store quarter data for this student
@@ -3201,7 +3319,8 @@ class EdonishAutoApp:
             semester_property_id = 0
             if semester_mark_list and len(semester_mark_list) > 0:
                 semester_mark_val_raw = semester_mark_list[0].get("shortName") or ""
-                semester_mark_val = self._parse_grade_display(semester_mark_val_raw)
+                semester_mark_raw = semester_mark_list[0].get("mark")
+                semester_mark_val = self._parse_grade_display(semester_mark_val_raw, mark_value=semester_mark_raw)
                 semester_property_id = semester_mark_list[0].get("semesterPropertyId", 0)
 
             year_mark_list = s.get("yearMark", [])
@@ -3209,7 +3328,8 @@ class EdonishAutoApp:
             year_property_id = 0
             if year_mark_list and len(year_mark_list) > 0:
                 year_mark_val_raw = year_mark_list[0].get("shortName") or ""
-                year_mark_val = self._parse_grade_display(year_mark_val_raw)
+                year_mark_raw = year_mark_list[0].get("mark")
+                year_mark_val = self._parse_grade_display(year_mark_val_raw, mark_value=year_mark_raw)
                 year_property_id = year_mark_list[0].get("yearPropertyId", 0)
 
             self._student_quarter_data[row_idx] = {
@@ -3357,11 +3477,18 @@ class EdonishAutoApp:
         except Exception:
             pass
 
-    def _parse_grade_display(self, short_name: str) -> str:
+    def _parse_grade_display(self, short_name: str, mark_value: int = None) -> str:
         """Parse a grade shortName from the edonish API into display format.
         
         Handles fractional grades like "1/2", "0/2" by extracting the numerator.
         A numerator of 0 means Н/А (Не аттестован) — displayed as "Н/А".
+        
+        IMPORTANT: edonish API returns shortName="1/2" for Н/А grades
+        (because mark_type_id=1 is the Н/А type). So we also check the
+        mark_value field: if mark_value==0, it's Н/А regardless of shortName.
+        Additionally, "1/2" with numerator 1 is Н/А since grade 1 is invalid
+        (MIN_GRADE=5). Any fractional "X/Y" where X < MIN_GRADE is Н/А.
+        
         Non-fractional grades like "3", "7", "10" are kept as-is.
         Special values like "Н/А" are kept as-is.
         """
@@ -3373,13 +3500,19 @@ class EdonishAutoApp:
         if short_name in ("Н/А", "Н/A", "н/а", "N/A", "n/a"):
             return "Н/А"
         
-        # Fractional format: "X/Y" -> extract numerator
+        # Fractional format: "X/Y" -> check for Н/А or extract numerator
         if "/" in short_name:
-            numerator = short_name.split("/")[0].strip()
-            if numerator == "0":
-                return "Н/А"
-            elif numerator.isdigit():
-                return numerator
+            parts = short_name.split("/", 1)
+            numerator = parts[0].strip()
+            if numerator.isdigit():
+                num = int(numerator)
+                # Н/А detection: mark_value=0 OR numerator < MIN_GRADE
+                # (edonish returns "1/2" for Н/А, where 1 is mark_type_id)
+                if mark_value is not None and mark_value == 0:
+                    return "Н/А"
+                if num == 0 or (num < MIN_GRADE and num > 0):
+                    return "Н/А"
+                return str(num)
             else:
                 return short_name  # Fallback: show as-is
         
@@ -4415,20 +4548,55 @@ class EdonishAutoApp:
         line = f"[{timestamp}] [{prefix}] {message}"
 
         try:
+            # Add to visual log (colored Text controls)
             self.logs_list.controls.append(
-                Text(line, size=13, font_family="Roboto Mono", color=color)
+                Text(line, size=13, font_family="Roboto Mono", color=color, selectable=True)
             )
-            # Keep max 500 lines
+            # Keep max 500 lines in visual
             if len(self.logs_list.controls) > 500:
                 self.logs_list.controls = self.logs_list.controls[-500:]
+
+            # Add to copyable text log
+            self._logs_lines.append(line)
+            if len(self._logs_lines) > 500:
+                self._logs_lines = self._logs_lines[-500:]
+            self.logs_text_field.value = "\n".join(self._logs_lines)
+
             self.page.update()
         except Exception:
             pass
 
     def _clear_logs(self):
         self.logs_list.controls.clear()
+        self._logs_lines.clear()
+        self.logs_text_field.value = ""
         self._log_message("Логи очищены")
         self.page.update()
+
+    def _copy_logs(self):
+        """Copy all log text to clipboard."""
+        try:
+            log_text = "\n".join(self._logs_lines)
+            self.page.set_clipboard(log_text)
+            self._show_snackbar("Логи скопированы в буфер обмена!")
+        except Exception as e:
+            self._show_snackbar(f"Ошибка копирования: {e}")
+
+    def _toggle_logs_mode(self):
+        """Toggle between visual (colored) and text (copyable) log view."""
+        try:
+            card_container = self.logs_page.controls[2].content  # Card > Container
+            if self._logs_mode == "visual":
+                self._logs_mode = "text"
+                card_container.content = self._logs_text_container
+                self._show_snackbar("Режим: текст (можно выделять и копировать)")
+            else:
+                self._logs_mode = "visual"
+                card_container.content = self._logs_visual_container
+                self._show_snackbar("Режим: визуальный (цветные логи)")
+            self.page.update()
+        except Exception:
+            pass
 
     def _safe_update(self):
         """Thread-safe page update helper — safe to call from any thread."""
