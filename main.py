@@ -1451,38 +1451,63 @@ class EdonishAutoApp:
     def _build_semester_options(self):
         """Build semester options from quarters_data.
         
-        Semester 1 = Quarter 1 + Quarter 2
-        Semester 2 = Quarter 3 + Quarter 4
-        Full Year  = All quarters (1-4)
+        Uses index-based grouping (robust) rather than name matching:
+        Semester 1 = first 2 quarters (Q1, Q2)
+        Semester 2 = next 2 quarters (Q3, Q4)
+        Full Year  = all quarters
         """
         options = []
-        # Group quarters by semester
-        q1_list = [q for q in self.quarters_data if "1" in q.get("name", "")]
-        q2_list = [q for q in self.quarters_data if "2" in q.get("name", "")]
-        q3_list = [q for q in self.quarters_data if "3" in q.get("name", "")]
-        q4_list = [q for q in self.quarters_data if "4" in q.get("name", "")]
+        qd = self.quarters_data
         
-        if q1_list or q2_list:
+        if len(qd) >= 4:
             options.append({
                 "label": "1 полугодие (1-2 четверть)",
-                "quarters": q1_list + q2_list,
+                "quarters": [qd[0], qd[1]],
             })
-        if q3_list or q4_list:
             options.append({
                 "label": "2 полугодие (3-4 четверть)",
-                "quarters": q3_list + q4_list,
+                "quarters": [qd[2], qd[3]],
             })
-        if self.quarters_data:
             options.append({
                 "label": "Весь год (1-4 четверть)",
-                "quarters": list(self.quarters_data),
+                "quarters": list(qd),
             })
-        
-        # Fallback if no quarters found
-        if not options:
+        elif len(qd) == 3:
+            options.append({
+                "label": "1 полугодие (1-2 четверть)",
+                "quarters": [qd[0], qd[1]],
+            })
+            options.append({
+                "label": "2 полугодие (3 четверть)",
+                "quarters": [qd[2]],
+            })
             options.append({
                 "label": "Весь год",
-                "quarters": list(self.quarters_data),
+                "quarters": list(qd),
+            })
+        elif len(qd) == 2:
+            options.append({
+                "label": "1 полугодие (1 четверть)",
+                "quarters": [qd[0]],
+            })
+            options.append({
+                "label": "2 полугодие (2 четверть)",
+                "quarters": [qd[1]],
+            })
+            options.append({
+                "label": "Весь год",
+                "quarters": list(qd),
+            })
+        elif len(qd) == 1:
+            options.append({
+                "label": f"Весь год ({qd[0].get('name', '1 четверть')})",
+                "quarters": list(qd),
+            })
+        else:
+            # No quarters loaded yet — placeholder
+            options.append({
+                "label": "Весь год (загрузка...)",
+                "quarters": [],
             })
         
         return options
@@ -1492,9 +1517,20 @@ class EdonishAutoApp:
         selected_label = self.topics_semester_dropdown.value
         for opt in self._semester_options:
             if opt["label"] == selected_label:
-                return opt["quarters"]
+                quarters = opt["quarters"]
+                if not quarters and self.quarters_data:
+                    # Rebuild if quarters list is empty but data exists
+                    self._semester_options = self._build_semester_options()
+                    for rebuilt_opt in self._semester_options:
+                        if rebuilt_opt["label"] == selected_label:
+                            return rebuilt_opt["quarters"]
+                    # If label not found in rebuilt, return all
+                    return list(self.quarters_data)
+                return quarters
         # Fallback: return all
-        return list(self.quarters_data)
+        if self.quarters_data:
+            return list(self.quarters_data)
+        return []
 
     def _on_topics_load(self):
         """Load topics for selected class/subject across all quarters in the selected semester."""
@@ -1536,6 +1572,19 @@ class EdonishAutoApp:
 
         # Get all quarters for the selected semester
         semester_quarters = self._get_selected_semester_quarters()
+        semester_label = self.topics_semester_dropdown.value or "?"
+        self._log_message(f"Период: {semester_label}, четвертей: {len(semester_quarters)}, quarters_data: {len(self.quarters_data)}")
+        
+        if not semester_quarters:
+            self._log_message("Нет четвертей для выбранного периода! Попробуйте перезагрузить.", "error")
+            self.topics_list_container.content = Column([
+                Icon(Icons.WARNING, size=48, color=ft.Colors.ORANGE_500),
+                Container(height=12),
+                Text("Нет данных о четвертях", size=16, color=ft.Colors.ORANGE_700),
+                Text("Попробуйте выбрать другой период или перезагрузить страницу", size=13, color=ft.Colors.GREY_600),
+            ], horizontal_alignment=CrossAxisAlignment.CENTER)
+            self.page.update()
+            return
 
         def load():
             try:
@@ -1543,18 +1592,34 @@ class EdonishAutoApp:
                 all_dates = []
                 for q in semester_quarters:
                     qprop_id = q.get("qpropId", 0)
+                    qname = q.get("name", "?")
                     if not qprop_id:
+                        self.page.run_thread(lambda n=qname: self._log_message(f"Пропуск четверти '{n}': qpropId=0", "warning"))
                         continue
                     try:
+                        self.page.run_thread(lambda n=qname, qid=qprop_id: self._log_message(f"Загрузка дат: {n} (qpropId={qid})..."))
                         dates_data = self.api.get_journal_dates(
                             group_id=group_id,
                             subject_id=subject_id,
                             quarter_property_id=qprop_id,
                         )
-                        if dates_data and dates_data[0].get("days"):
-                            all_dates.extend(dates_data[0]["days"])
+                        if dates_data:
+                            days = dates_data[0].get("days") if isinstance(dates_data, list) and len(dates_data) > 0 else None
+                            if days:
+                                self.page.run_thread(lambda n=qname, c=len(days): self._log_message(f"Четверть '{n}': {c} дат"))
+                                all_dates.extend(days)
+                            else:
+                                self.page.run_thread(lambda n=qname: self._log_message(f"Четверть '{n}': 0 дат (пустой ответ)", "warning"))
+                        else:
+                            self.page.run_thread(lambda n=qname: self._log_message(f"Четверть '{n}': API вернул пустой ответ", "warning"))
                     except Exception as e:
-                        self.page.run_thread(lambda e=str(e): self._log_message(f"Ошибка загрузки дат: {e}", "error"))
+                        self.page.run_thread(lambda n=qname, e=str(e): self._log_message(f"Ошибка загрузки дат для '{n}': {e}", "error"))
+
+                self.page.run_thread(lambda: self._log_message(f"Всего дат загружено: {len(all_dates)}"))
+
+                if not all_dates:
+                    self.page.run_thread(lambda: self._display_topics_list([], is_flat=True))
+                    return
 
                 # Sort by date
                 all_dates.sort(key=lambda d: d.get("assignmentDate") or "")
@@ -1610,8 +1675,14 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        
+        if not semester_quarters:
+            self._show_snackbar("Нет четвертей для выбранного периода! Выберите другой период.")
+            self._log_message(f"Ошибка: semester_quarters пустой (период: {semester_label}, quarters_data: {len(self.quarters_data)})", "error")
+            return
+
         self._show_snackbar(f"Заполнение тем ({semester_label})...")
-        self._log_message(f"Загрузка дат для заполнения тем ({semester_label})...")
+        self._log_message(f"Заполнение тем ({semester_label}): {len(semester_quarters)} четвертей, {len(topics)} тем")
 
         def do_fill():
             try:
@@ -1619,7 +1690,9 @@ class EdonishAutoApp:
                 all_dates = []
                 for q in semester_quarters:
                     qprop_id = q.get("qpropId", 0)
+                    qname = q.get("name", "?")
                     if not qprop_id:
+                        self.page.run_thread(lambda n=qname: self._log_message(f"Пропуск четверти '{n}': qpropId=0", "warning"))
                         continue
                     try:
                         dates_data = self.api.get_journal_dates(
@@ -1627,14 +1700,16 @@ class EdonishAutoApp:
                             subject_id=subject_id,
                             quarter_property_id=qprop_id,
                         )
-                        if dates_data and dates_data[0].get("days"):
-                            all_dates.extend(dates_data[0]["days"])
+                        if dates_data:
+                            days = dates_data[0].get("days") if isinstance(dates_data, list) and len(dates_data) > 0 else None
+                            if days:
+                                all_dates.extend(days)
                     except Exception as e:
-                        self.page.run_thread(lambda e=str(e): self._log_message(f"Ошибка загрузки дат: {e}", "error"))
+                        self.page.run_thread(lambda n=qname, e=str(e): self._log_message(f"Ошибка загрузки дат для '{n}': {e}", "error"))
 
                 if not all_dates:
                     self.page.run_thread(lambda: self._log_message("Нет дат для заполнения тем!", "error"))
-                    self.page.run_thread(lambda: self._show_snackbar("Нет дат для заполнения тем!"))
+                    self.page.run_thread(lambda: self._show_snackbar("Нет дат для заполнения тем! Проверьте выбор периода."))
                     return
 
                 # Sort by date
@@ -1660,7 +1735,8 @@ class EdonishAutoApp:
                 msg = f"Заполнено тем: {filled}/{to_fill} (всего дат: {len(all_dates)})"
                 self.page.run_thread(lambda m=msg: self._log_message(m))
                 self.page.run_thread(lambda m=msg: self._show_snackbar(m))
-                self._on_topics_load()
+                # Reload topics view — must be thread-safe
+                self.page.run_thread(lambda: self._on_topics_load())
             except Exception as ex:
                 self.page.run_thread(lambda e=str(ex): self._log_message(f"Ошибка: {e}", "error"))
                 self.page.run_thread(lambda e=str(ex): self._show_snackbar(f"Ошибка: {e}"))
@@ -1702,8 +1778,14 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        
+        if not semester_quarters:
+            self._show_snackbar("Нет четвертей для выбранного периода!")
+            self._log_message(f"Ошибка: semester_quarters пустой (период: {semester_label})", "error")
+            return
+
         self._show_snackbar(f"Заполнение ДЗ ({semester_label})...")
-        self._log_message(f"Загрузка дат для заполнения ДЗ ({semester_label})...")
+        self._log_message(f"Заполнение ДЗ ({semester_label}): {len(semester_quarters)} четвертей, {len(hws)} ДЗ")
 
         def do_fill():
             try:
@@ -1711,7 +1793,9 @@ class EdonishAutoApp:
                 all_dates = []
                 for q in semester_quarters:
                     qprop_id = q.get("qpropId", 0)
+                    qname = q.get("name", "?")
                     if not qprop_id:
+                        self.page.run_thread(lambda n=qname: self._log_message(f"Пропуск четверти '{n}': qpropId=0", "warning"))
                         continue
                     try:
                         dates_data = self.api.get_journal_dates(
@@ -1719,14 +1803,16 @@ class EdonishAutoApp:
                             subject_id=subject_id,
                             quarter_property_id=qprop_id,
                         )
-                        if dates_data and dates_data[0].get("days"):
-                            all_dates.extend(dates_data[0]["days"])
+                        if dates_data:
+                            days = dates_data[0].get("days") if isinstance(dates_data, list) and len(dates_data) > 0 else None
+                            if days:
+                                all_dates.extend(days)
                     except Exception as e:
-                        self.page.run_thread(lambda e=str(e): self._log_message(f"Ошибка загрузки дат: {e}", "error"))
+                        self.page.run_thread(lambda n=qname, e=str(e): self._log_message(f"Ошибка загрузки дат для '{n}': {e}", "error"))
 
                 if not all_dates:
                     self.page.run_thread(lambda: self._log_message("Нет дат для заполнения ДЗ!", "error"))
-                    self.page.run_thread(lambda: self._show_snackbar("Нет дат для заполнения ДЗ!"))
+                    self.page.run_thread(lambda: self._show_snackbar("Нет дат для заполнения ДЗ! Проверьте выбор периода."))
                     return
 
                 # Sort by date
@@ -1751,7 +1837,7 @@ class EdonishAutoApp:
                 msg = f"Заполнено ДЗ: {filled}/{to_fill} (всего дат: {len(all_dates)})"
                 self.page.run_thread(lambda m=msg: self._log_message(m))
                 self.page.run_thread(lambda m=msg: self._show_snackbar(m))
-                self._on_topics_load()
+                self.page.run_thread(lambda: self._on_topics_load())
             except Exception as ex:
                 self.page.run_thread(lambda e=str(ex): self._log_message(f"Ошибка: {e}", "error"))
                 self.page.run_thread(lambda e=str(ex): self._show_snackbar(f"Ошибка: {e}"))
@@ -1795,8 +1881,14 @@ class EdonishAutoApp:
 
         semester_label = self.topics_semester_dropdown.value or "Весь год"
         semester_quarters = self._get_selected_semester_quarters()
+        
+        if not semester_quarters:
+            self._show_snackbar("Нет четвертей для выбранного периода!")
+            self._log_message(f"Ошибка: semester_quarters пустой (период: {semester_label})", "error")
+            return
+
         self._show_snackbar(f"Загрузка тем и ДЗ ({semester_label})...")
-        self._log_message(f"Загрузка дат для заполнения тем и ДЗ ({semester_label})...")
+        self._log_message(f"Загрузка тем и ДЗ ({semester_label}): {len(semester_quarters)} четвертей, {len(topics)} тем, {len(hws)} ДЗ")
 
         def do_upload():
             try:
@@ -1804,7 +1896,9 @@ class EdonishAutoApp:
                 all_dates = []
                 for q in semester_quarters:
                     qprop_id = q.get("qpropId", 0)
+                    qname = q.get("name", "?")
                     if not qprop_id:
+                        self.page.run_thread(lambda n=qname: self._log_message(f"Пропуск четверти '{n}': qpropId=0", "warning"))
                         continue
                     try:
                         dates_data = self.api.get_journal_dates(
@@ -1812,14 +1906,16 @@ class EdonishAutoApp:
                             subject_id=subject_id,
                             quarter_property_id=qprop_id,
                         )
-                        if dates_data and dates_data[0].get("days"):
-                            all_dates.extend(dates_data[0]["days"])
+                        if dates_data:
+                            days = dates_data[0].get("days") if isinstance(dates_data, list) and len(dates_data) > 0 else None
+                            if days:
+                                all_dates.extend(days)
                     except Exception as e:
-                        self.page.run_thread(lambda e=str(e): self._log_message(f"Ошибка загрузки дат: {e}", "error"))
+                        self.page.run_thread(lambda n=qname, e=str(e): self._log_message(f"Ошибка загрузки дат для '{n}': {e}", "error"))
 
                 if not all_dates:
                     self.page.run_thread(lambda: self._log_message("Нет дат для заполнения!", "error"))
-                    self.page.run_thread(lambda: self._show_snackbar("Нет дат для заполнения!"))
+                    self.page.run_thread(lambda: self._show_snackbar("Нет дат! Проверьте выбор периода."))
                     return
 
                 # Sort by date
@@ -1855,7 +1951,7 @@ class EdonishAutoApp:
                 msg = f"Загружено: тем {filled_topics}, ДЗ {filled_hw} (всего дат: {len(all_dates)})"
                 self.page.run_thread(lambda m=msg: self._log_message(m))
                 self.page.run_thread(lambda m=msg: self._show_snackbar(m))
-                self._on_topics_load()
+                self.page.run_thread(lambda: self._on_topics_load())
             except Exception as ex:
                 self.page.run_thread(lambda e=str(ex): self._log_message(f"Ошибка: {e}", "error"))
                 self.page.run_thread(lambda e=str(ex): self._show_snackbar(f"Ошибка: {e}"))
@@ -1874,9 +1970,11 @@ class EdonishAutoApp:
         else:
             if not dates_data or not dates_data[0].get("days"):
                 self.topics_list_container.content = Column([
-                    Icon(Icons.INFO, size=48, color=ft.Colors.GREY_400),
+                    Icon(Icons.INFO_OUTLINED, size=48, color=ft.Colors.GREY_400),
                     Container(height=12),
-                    Text("Нет данных о датах", size=16, color=ft.Colors.GREY_600),
+                    Text("Нет дат для этого периода", size=16, color=ft.Colors.GREY_600),
+                    Container(height=8),
+                    Text("Проверьте: выбран ли правильный класс, предмет и период", size=13, color=ft.Colors.GREY_500),
                 ], horizontal_alignment=CrossAxisAlignment.CENTER)
                 self.page.update()
                 return
@@ -1884,9 +1982,11 @@ class EdonishAutoApp:
 
         if not dates:
             self.topics_list_container.content = Column([
-                Icon(Icons.INFO, size=48, color=ft.Colors.GREY_400),
+                Icon(Icons.INFO_OUTLINED, size=48, color=ft.Colors.GREY_400),
                 Container(height=12),
-                Text("Нет данных о датах", size=16, color=ft.Colors.GREY_600),
+                Text("Нет дат для этого периода", size=16, color=ft.Colors.GREY_600),
+                Container(height=8),
+                Text("Возможно, для этого предмета и класса нет расписания в выбранных четвертях", size=13, color=ft.Colors.GREY_500),
             ], horizontal_alignment=CrossAxisAlignment.CENTER)
             self.page.update()
             return
@@ -2294,6 +2394,9 @@ class EdonishAutoApp:
                                 "currentQuarter": q.get("currentQuarter", False),
                             }
                 self.quarters_data = list(quarters_by_name.values())
+                # Log quarter details for debugging
+                for i, q in enumerate(self.quarters_data):
+                    self._log_message(f"Четверть {i+1}: {q.get('name', '?')} (qpropId={q.get('qpropId', 0)})")
 
                 # Build subjects with curriculumPropertyId from journal_options
                 subjects_with_curriculum = {}
