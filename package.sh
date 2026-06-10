@@ -99,7 +99,7 @@ Maintainer: Kamar Narziev <kamar@edonish.tj>
 Description: Automated grade management for edonish.tj
  eDonish Auto is a desktop application for automated grade
  management on the edonish.tj electronic journal system.
- Features: parallel grade engine, CLI mode, Docker support.
+ Features: parallel grade engine, CLI mode, cross-platform builds.
 EOF
 
     # Post-install script

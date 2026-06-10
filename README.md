@@ -13,7 +13,6 @@
 - 📊 **Просмотр журнала** — удобный просмотр оценок по классам/предметам/четвертям
 - 🔄 **Четвертные оценки** — автоматическое заполнение четвертных, семестровых и годовых оценок
 - 📝 **Логирование** — подробные логи всех операций
-- 🐳 **Docker** — запуск в контейнере (CLI и GUI режимы)
 - 📦 **Установщики** — .exe (Windows), .rpm/.deb (Linux), .dmg (macOS)
 
 ## Установка
@@ -58,24 +57,7 @@ sudo rpm -i edonish-auto-2.0.0-1.x86_64.rpm
 4. Выберите класс, предмет, четверть
 5. Нажмите "Анализировать", затем "Запустить"
 
-### Способ 2: Docker (рекомендуется для серверов)
-
-```bash
-# Клонируйте репозиторий
-git clone https://github.com/YOUR_USERNAME/edonish-auto.git
-cd edonish-auto
-
-# Создайте .env файл с вашими данными
-cp .env.example .env
-
-# Запустите CLI (headless, без GUI)
-docker compose up
-
-# Или с явными параметрами
-docker compose run edonish-cli --login 200117707 --password test123 --class "8Б"
-```
-
-### Способ 3: Python (ручная установка)
+### Способ 2: Python (ручная установка)
 
 ```bash
 pip install customtkinter requests
@@ -83,7 +65,7 @@ python3 main.py          # GUI режим
 python3 main_cli.py --login 200117707 --password test123  # CLI режим
 ```
 
-### Способ 4: CLI режим
+### Способ 3: CLI режим
 
 ```bash
 # Заполнить все пустые оценки
@@ -127,7 +109,6 @@ bash build.sh macos     # macOS (только на macOS)
 bash build.sh all       # Всё для текущей платформы
 
 # Или через Makefile
-make build              # Docker build
 make native-gui         # GUI напрямую
 make native-cli         # CLI напрямую
 ```
@@ -146,37 +127,6 @@ git push origin v2.0.0
 - `edonish-auto_2.0.0_amd64.deb` — Ubuntu/Debian
 - `edonish-auto-2.0.0-1.x86_64.rpm` — Fedora/RHEL
 - `edonish-auto-2.0.0.dmg` — macOS
-
-## Docker: подробности
-
-### CLI режим (по умолчанию)
-
-```bash
-docker compose build
-docker compose up
-docker compose run edonish-cli --login 200117707 --password test123 --min-grade 9
-```
-
-### GUI режим (только Linux с X11)
-
-```bash
-xhost +local:docker
-docker compose --profile gui up edonish-gui
-xhost -local:docker
-```
-
-### Переменные окружения
-
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `EDONISH_LOGIN` | Логин от edonish.tj | — |
-| `EDONISH_PASSWORD` | Пароль от edonish.tj | — |
-| `EDONISH_MIN_GRADE` | Минимальная оценка | 8 |
-| `EDONISH_MAX_GRADE` | Максимальная оценка | 10 |
-| `EDONISH_WORKERS` | Количество параллельных воркеров | 4 |
-| `EDONISH_CLASS` | Фильтр по классу | all |
-| `EDONISH_SUBJECT` | Фильтр по предмету | all |
-| `EDONISH_QUARTER` | Фильтр по четверти | all |
 
 ## CLI параметры
 
@@ -224,8 +174,6 @@ edonish-auto/
 ├── installer.nsi           # NSIS installer (Windows)
 ├── build.sh                # Скрипт сборки всех платформ
 ├── package.sh              # DEB/RPM упаковка
-├── Dockerfile              # Docker сборка (multi-stage)
-├── docker-compose.yml      # Docker Compose
 ├── .github/workflows/      # CI/CD (Windows/Linux/macOS)
 ├── .env.example            # Пример переменных окружения
 ├── Makefile                # Удобные команды

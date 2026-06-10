@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-eDonish Auto CLI — Headless command-line interface for Docker/servers.
+eDonish Auto CLI — Headless command-line interface for servers/automation.
 No GUI required. Works fully in terminal.
 
 Usage:
