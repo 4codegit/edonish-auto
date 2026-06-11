@@ -25,17 +25,15 @@ jobs:
 
       - name: Run app once to cache Flet
         run: |
-          Start-Process -FilePath "python" -ArgumentList "-c", "import flet; print('caching')" -Wait
+          python -c "import flet; print('caching flet')"
 
-      - name: Build GUI binary with PyInstaller
+      - name: Build GUI binary
         run: |
-          pyinstaller edonish-auto.spec --clean --noconfirm
-        env:
-          PYTHONWARNINGS: ignore
+          pyinstaller --onefile --windowed --name edonish-auto main.py
 
       - name: Build CLI binary
         run: |
-          pyinstaller edonish-auto-cli.spec --clean --noconfirm
+          pyinstaller --onefile --name edonish-auto-cli main_cli.py
 
       - name: List dist
         run: |
@@ -43,11 +41,7 @@ jobs:
 
       - name: Create ZIP package
         run: |
-          if (Test-Path "dist\edonish-auto.exe") {
-            Compress-Archive -Path dist\edonish-auto.exe,dist\edonish-auto-cli.exe -DestinationPath edonish-auto-windows.zip -Force
-          } else {
-            Write-Error "edonish-auto.exe not found"
-          }
+          Compress-Archive -Path dist\edonish-auto.exe,dist\edonish-auto-cli.exe -DestinationPath edonish-auto-windows.zip -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
