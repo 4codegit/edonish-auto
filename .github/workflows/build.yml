@@ -107,7 +107,8 @@ jobs:
 
       - name: Install NSIS and build installer
         run: |
-          choco install nsis -y
+          # Install NSIS using winget (more reliable than choco)
+          winget install --id NSIS.NSIS --silent --accept-package-agreements --accept-source-agreements
           $env:Path = "C:\Program Files (x86)\NSIS;$env:Path"
           # Update version in installer.nsi to match APP_VERSION
           (Get-Content installer.nsi) -replace '!define APPVERSION ".*"', "!define APPVERSION `"${{ env.APP_VERSION }}`"" | Set-Content installer.nsi
