@@ -143,3 +143,27 @@ Stage Summary:
 - Н/А grades now correctly display as "Н/А" instead of "1"
 - Logs are now copyable (text mode + clipboard button)
 - Topics use correct per-group quarter IDs
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Windows GL crash, fix login crash, rewrite Journal page with grade distribution, improve UI/UX, push v0.2.0 release
+
+Work Log:
+- Fixed Windows OpenGL crash by setting FYNE_RENDER=software on Windows only (preserves hardware rendering on Linux/macOS)
+- Fixed login crash by replacing mainWindow.SetContent() with root container pattern (container.NewStack + Refresh)
+- Rewrote Journal page with "Анализ ученика" mode showing grade spread with min/max/avg indicators
+- Added visual spread bar: min[====o====]max with average position marker
+- Added grade distribution histogram per subject
+- Added class comparison (student avg vs class avg with diff)
+- Added per-student stats columns (Ср│Мин│Макс) in journal table
+- Added class summary with top-5 and bottom-3 students
+- Improved UI/UX: buttons with icons, monospace fonts, user avatar initial, better visual formatting
+- Updated version to 0.2.0 across config, FyneApp.toml, Makefile
+- Pushed to GitHub and created v0.2.0 tag (triggers CI/CD build)
+
+Stage Summary:
+- v0.2.0 pushed to GitHub with tag, CI/CD will build 9 artifacts
+- All critical bugs fixed: login crash, Windows GL crash
+- Journal page now has student grade distribution analysis mode
+- Files modified: main.go, app.go, login.go, journal.go, auto.go, logs.go, school.go, config.go, FyneApp.toml, Makefile
