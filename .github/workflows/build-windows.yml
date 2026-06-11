@@ -23,17 +23,27 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Pre-cache Flet
+        run: |
+          python -c "import flet; print('Flet installed')"
+          python -c "import flet_desktop; print('Flet desktop installed')"
+
       - name: Build GUI binary
         run: |
-          pyinstaller edonish-auto.spec --clean --noconfirm
+          flet pack main.py --onefile --name edonish-auto --windowed
+        working-directory: ${{ github.workspace }}
 
       - name: Build CLI binary
         run: |
           pyinstaller edonish-auto-cli.spec --clean --noconfirm
 
+      - name: List dist
+        run: |
+          dir dist
+
       - name: Create ZIP package
         run: |
-          Compress-Archive -Path dist\windows\*.exe -DestinationPath edonish-auto-windows.zip -Force
+          Compress-Archive -Path dist\edonish-auto.exe,dist\edonish-auto-cli.exe -DestinationPath edonish-auto-windows.zip -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
