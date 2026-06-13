@@ -1,156 +1,208 @@
+// LoginPage — страница входа в систему.
+// Содержит поля для логина/пароля, чекбокс «Запомнить» и кнопку входа.
+// Поддерживает автозаполнение из сохранённой сессии.
 package ui
 
 import (
-	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/4codegit/edonish-auto/internal/config"
 )
 
-// LoginPage holds the login screen UI components.
+// LoginPage — страница авторизации
 type LoginPage struct {
-	app         *App
-	loginEntry  *widget.Entry
-	passEntry   *widget.Entry
-	rememberChk *widget.Check
-	statusLabel *widget.Label
-	loginBtn    *widget.Button
+	app        *App            // Ссылка на главное приложение
+	container  *fyne.Container // Корневой контейнер страницы
+	loginEntry *widget.Entry   // Поле логина
+	passEntry  *widget.Entry   // Поле пароля
+	remember   *widget.Check   // Чекбокс «Запомнить»
+	loginBtn   *widget.Button  // Кнопка «Войти»
+	schoolSel  *widget.Select  // Выбор школы (появляется после логина)
 }
 
-// NewLoginPage creates a new login page.
+// NewLoginPage создаёт страницу входа с автозаполнением из сессии
 func NewLoginPage(app *App) *LoginPage {
-	return &LoginPage{app: app}
-}
+	lp := &LoginPage{app: app}
 
-// Build creates the login view and returns the root container.
-func (p *LoginPage) Build() fyne.CanvasObject {
-	p.loginEntry = widget.NewEntry()
-	p.loginEntry.SetPlaceHolder("Логин (ID телефона)")
+	// Заголовок приложения
+	titleText := canvas.NewText(config.AppName, nil)
+	titleText.TextStyle = fyne.TextStyle{Bold: true}
+	titleText.TextSize = 28
 
-	p.passEntry = widget.NewPasswordEntry()
-	p.passEntry.SetPlaceHolder("Пароль")
-	p.passEntry.OnSubmitted = func(_ string) { p.doLogin() }
+	// Подзаголовок
+	subtitleText := canvas.NewText("Автоматизация электронного журнала edonish.tj", nil)
+	subtitleText.TextSize = 14
 
-	p.rememberChk = widget.NewCheck("Запомнить меня", nil)
+	// Поле логина
+	lp.loginEntry = widget.NewEntry()
+	lp.loginEntry.SetPlaceHolder("Введите логин")
+	lp.loginEntry.Wrapping = fyne.TextWrap(fyne.TextTruncate)
 
-	p.statusLabel = widget.NewLabel("")
-	p.statusLabel.Wrapping = fyne.TextWrapWord
+	// Поле пароля (скрытый ввод)
+	lp.passEntry = widget.NewPasswordEntry()
+	lp.passEntry.SetPlaceHolder("Введите пароль")
 
-	p.loginBtn = widget.NewButton("Войти", func() {
-		p.doLogin()
-	})
-	p.loginBtn.Importance = widget.HighImportance
+	// Чекбокс «Запомнить меня»
+	lp.remember = widget.NewCheck("Запомнить", nil)
 
-	// Logo icon
-	icon := canvas.NewImageFromResource(theme.ComputerIcon())
-	icon.FillMode = canvas.ImageFillContain
-	icon.SetMinSize(fyne.NewSize(96, 96))
+	// Кнопка входа
+	lp.loginBtn = widget.NewButton("Войти", lp.onLogin)
+	lp.loginBtn.Importance = widget.HighImportance
 
-	// Title and subtitle
-	title := widget.NewLabelWithStyle("eDonish Auto", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	subtitle := widget.NewLabel("Автоматизация электронного журнала edonish.tj")
-	subtitle.Alignment = fyne.TextAlignCenter
-	subtitle.TextStyle = fyne.TextStyle{Italic: true}
+	// Выбор школы (скрыт до успешной авторизации)
+	lp.schoolSel = widget.NewSelect([]string{}, lp.onSchoolSelected)
+	lp.schoolSel.PlaceHolder = "Выберите школу..."
 
-	versionLabel := widget.NewLabel(fmt.Sprintf("v%s", config.AppVersion))
-	versionLabel.Alignment = fyne.TextAlignCenter
-	versionLabel.TextStyle = fyne.TextStyle{Italic: true}
+	// Автозаполнение из сохранённой сессии
+	if lp.app.session != nil {
+		lp.loginEntry.SetText(lp.app.session.LoginID)
+		if lp.app.session.Remember {
+			lp.passEntry.SetText(lp.app.session.Password)
+			lp.remember.SetChecked(true)
+		}
+	}
 
-	shortcut := widget.NewLabel("Enter — быстрый вход")
-	shortcut.Alignment = fyne.TextAlignCenter
-	shortcut.TextStyle = fyne.TextStyle{Italic: true}
-
-	// Login form card
-	formCard := widget.NewCard("Авторизация", "", container.NewVBox(
-		container.NewHBox(
-			widget.NewIcon(theme.AccountIcon()),
-			widget.NewLabelWithStyle("Логин", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		),
-		p.loginEntry,
-		container.NewHBox(
-			widget.NewIcon(theme.VisibilityIcon()),
-			widget.NewLabelWithStyle("Пароль", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		),
-		p.passEntry,
-		widget.NewSeparator(),
-		p.rememberChk,
-		p.loginBtn,
-		container.NewCenter(shortcut),
-		p.statusLabel,
-	))
-
-	content := container.NewVBox(
+	// Форма входа
+	form := container.NewVBox(
 		layout.NewSpacer(),
-		container.NewCenter(
-			container.NewVBox(
-				container.NewCenter(icon),
-				container.NewCenter(title),
-				container.NewCenter(subtitle),
-				container.NewCenter(versionLabel),
-				widget.NewSeparator(),
-				formCard,
-			),
+		container.NewHBox(layout.NewSpacer(), titleText, layout.NewSpacer()),
+		container.NewHBox(layout.NewSpacer(), subtitleText, layout.NewSpacer()),
+		widget.NewSeparator(),
+		widget.NewForm(
+			&widget.FormItem{Text: "Логин", Widget: lp.loginEntry},
+			&widget.FormItem{Text: "Пароль", Widget: lp.passEntry},
 		),
+		lp.remember,
+		lp.loginBtn,
+		lp.schoolSel,
 		layout.NewSpacer(),
 	)
 
-	return content
+	// Центрируем форму
+	lp.container = container.NewPadded(
+		container.NewCenter(
+			container.NewVBox(
+				container.NewHBox(layout.NewSpacer(), form, layout.NewSpacer()),
+			),
+		),
+	)
+
+	return lp
 }
 
-// LoadSession loads saved session data into the form.
-func (p *LoginPage) LoadSession() {
-	loginID, password, remember, _ := p.app.LoadSessionData()
-	if loginID != "" {
-		p.loginEntry.SetText(loginID)
-	}
-	if remember && password != "" {
-		p.passEntry.SetText(password)
-		p.rememberChk.SetChecked(true)
-	}
+// GetLoginEntry возвращает поле ввода логина (для фокуса)
+func (lp *LoginPage) GetLoginEntry() *widget.Entry {
+	return lp.loginEntry
 }
 
-// doLogin handles the login button press.
-func (p *LoginPage) doLogin() {
-	loginID := p.loginEntry.Text
-	password := p.passEntry.Text
+// Container возвращает корневой контейнер страницы (реализация fyne.CanvasObject)
+func (lp *LoginPage) Container() fyne.CanvasObject {
+	return lp.container
+}
 
-	if loginID == "" || password == "" {
-		p.statusLabel.SetText("Введите логин и пароль")
+// onLogin обрабатывает нажатие кнопки «Войти»
+// Выполняет авторизацию и загружает список школ
+func (lp *LoginPage) onLogin() {
+	login := lp.loginEntry.Text
+	password := lp.passEntry.Text
+
+	// Проверяем, что поля заполнены
+	if login == "" || password == "" {
+		dialog.ShowError(
+			&simpleError{"Введите логин и пароль"},
+			lp.app.GetWindow(),
+		)
 		return
 	}
 
-	p.loginBtn.Disable()
-	p.loginBtn.SetText("Вход...")
-	p.statusLabel.SetText("Подключение к серверу...")
+	// Блокируем кнопку на время запроса
+	lp.loginBtn.Disable()
+	lp.loginBtn.SetText("Вход...")
 
-	// Save session
-	p.app.SaveSession(loginID, password, p.rememberChk.Checked)
-
+	// Выполняем авторизацию в горутине
 	go func() {
-		userInfo, err := p.app.apiClient.Login(loginID, password)
-		if err != nil {
-			fyne.Do(func() {
-				p.loginBtn.Enable()
-				p.loginBtn.SetText("Войти")
-				p.statusLabel.SetText(err.Error())
-			})
-			return
-		}
-
-		// Apply saved school selection if available
-		_, _, _, savedSchoolID := p.app.LoadSessionData()
-		if savedSchoolID > 0 && p.app.apiClient.HasMultipleSchools() {
-			p.app.apiClient.SetSchool(savedSchoolID)
-		}
-
+		err := lp.app.client.Login(login, password)
 		fyne.Do(func() {
-			p.app.onLoginSuccess(userInfo)
+			lp.loginBtn.Enable()
+			lp.loginBtn.SetText("Войти")
+
+			if err != nil {
+				dialog.ShowError(err, lp.app.GetWindow())
+				return
+			}
+
+			// Загружаем информацию о школах/ролях
+			err = lp.app.client.FetchHeaderInfo()
+			if err != nil {
+				dialog.ShowError(err, lp.app.GetWindow())
+				return
+			}
+
+			// Показываем выбор школы
+			schoolNames := make([]string, len(lp.app.client.Schools))
+			for i, school := range lp.app.client.Schools {
+				schoolNames[i] = school.SchoolName + " (" + school.Name + ")"
+			}
+			lp.schoolSel.Options = schoolNames
+			lp.schoolSel.Refresh()
+
+			// Если школа одна — выбираем автоматически
+			if len(lp.app.client.Schools) == 1 {
+				lp.schoolSel.SetSelectedIndex(0)
+			}
 		})
 	}()
+}
+
+// onSchoolSelected обрабатывает выбор школы
+// Устанавливает роль и переходит к дашборду
+func (lp *LoginPage) onSchoolSelected(selected string) {
+	if selected == "" {
+		return
+	}
+
+	// Определяем индекс выбранной школы
+	idx := -1
+	for i, opt := range lp.schoolSel.Options {
+		if opt == selected {
+			idx = i
+			break
+		}
+	}
+
+	if idx < 0 || idx >= len(lp.app.client.Schools) {
+		return
+	}
+
+	school := lp.app.client.Schools[idx]
+	err := lp.app.client.SelectSchool(school.SchoolID)
+	if err != nil {
+		dialog.ShowError(err, lp.app.GetWindow())
+		return
+	}
+
+	// Сохраняем сессию
+	go lp.app.SaveSession(
+		lp.loginEntry.Text,
+		lp.passEntry.Text,
+		school.SchoolID,
+		lp.remember.Checked,
+	)
+
+	// Переходим на дашборд
+	lp.app.ShowDashboard()
+}
+
+// simpleError — простая реализация error для отображения в диалогах
+type simpleError struct {
+	msg string
+}
+
+func (e *simpleError) Error() string {
+	return e.msg
 }
