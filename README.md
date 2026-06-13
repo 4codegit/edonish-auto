@@ -6,18 +6,26 @@
 
 ---
 
+## ✅ ГОТОВО! Тег v0.1.0 отправлен на GitHub
+
+**GitHub Actions уже запущен!** Проверьте статус сборки: [Actions](https://github.com/4codegit/edonish-auto/actions)
+
+После завершения сборки файлы появятся в [Releases](https://github.com/4codegit/edonish-auto/releases)
+
+---
+
 ## 🚀 Скачать готовую версию
 
 ### GitHub Releases
 
-Скачайте готовую версию для вашей платформы: [Releases](https://github.com/YOUR_USERNAME/edonish-app/releases)
+Скачайте готовую версию для вашей платформы: [Releases](https://github.com/4codegit/edonish-auto/releases)
 
 | Платформа | Файл | Установка |
 |-----------|------|-----------|
-| 🐧 Linux (DEB) | `edonish-app_x.x.x_amd64.deb` | `sudo dpkg -i edonish-app_x.x.x_amd64.deb` |
-| 🐧 Linux (RPM) | `edonish-app-x.x.x-1.x86_64.rpm` | `sudo rpm -i edonish-app-x.x.x-1.x86_64.rpm` |
+| 🐧 Linux (DEB) | `edonish-app_x.x.x_amd64.deb` | `sudo dpkg -i file.deb` |
+| 🐧 Linux (RPM) | `edonish-app-x.x.x-1.x86_64.rpm` | `sudo rpm -i file.rpm` |
 | 🪟 Windows | `edonish-app-windows.exe` | Запустить напрямую |
-| 🪟 Windows (Setup) | `edonish-app-windows-installer.exe` | Запустить установщик |
+| 🪟 Windows (Setup) | `edonish-app-windows-installer.exe` | Установщик |
 | 🤖 Android | `edonish-app.apk` | Установить на устройстве |
 
 ---
@@ -241,23 +249,30 @@ gradesURL:   "https://edonish.tj/teacher/v1/journal/students", // Оценки
 
 ## 📦 Создание GitHub Release (для разработчиков)
 
-### Автоматическая сборка через GitHub Actions
+### ✅ ТЕГ УЖЕ ОТПРАВЛЕН!
 
-1. **Создайте и отправьте тег:**
+**v0.1.0 уже отправлен на GitHub!** GitHub Actions автоматически собирает все файлы.
+
+Проверьте статус: [Actions Tab](https://github.com/4codegit/edonish-auto/actions)
+
+После завершения файлы появятся в [Releases](https://github.com/4codegit/edonish-auto/releases)
+
+### Создать новый Release
+
 ```bash
-# Локально создайте тег с версией
-git tag v0.1.0
-git push origin v0.1.0
+# Создать новый тег
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-2. **GitHub Actions автоматически:**
-   - Собрать Linux бинарник
-   - Собрать DEB пакет (.deb)
-   - Собрать RPM пакет (.rpm)
-   - Собрать Windows бинарник (.exe)
-   - Собрать установщик Windows
-   - Собрать Android APK (.apk)
-   - Создать GitHub Release с файлами
+GitHub Actions автоматически:
+- ✅ Собрать Linux бинарник
+- ✅ Собрать DEB пакет (.deb)
+- ✅ Собрать RPM пакет (.rpm)
+- ✅ Собрать Windows бинарник (.exe)
+- ✅ Собрать установщик Windows
+- ✅ Собрать Android APK (.apk)
+- ✅ Создать GitHub Release с файлами
 
 ### Локальная сборка всех платформ
 
