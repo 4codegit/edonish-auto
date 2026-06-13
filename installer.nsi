@@ -9,6 +9,10 @@
 !define CLIBINARY "edonish-auto-cli.exe"
 !define COMPANY "Edonish Auto Team"
 
+; Go Fyne Version
+!define GOLANG_APP "edonish-app-windows.exe"
+!define GOLANG_APPNAME "Edonish App (Go)"
+
 ; Modern UI
 !include "MUI2.nsh"
 
@@ -38,17 +42,20 @@ Section "Core Files" SecCore
     ; Main executables
     File "dist\windows\${APPEXE}"
     File "dist\windows\${CLIBINARY}"
+    File "dist\windows\${GOLANG_APP}"
 
     ; Create directories
     CreateDirectory "$INSTDIR\logs"
     CreateDirectory "$INSTDIR\output"
 
-    ; Desktop shortcut
+    ; Desktop shortcuts
     CreateShortCut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\${APPEXE}"
+    CreateShortCut "$DESKTOP\${GOLANG_APPNAME}.lnk" "$INSTDIR\${GOLANG_APP}"
 
     ; Start Menu shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"
     CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\${APPEXE}"
+    CreateShortCut "$SMPROGRAMS\${APPNAME}\${GOLANG_APPNAME}.lnk" "$INSTDIR\${GOLANG_APP}"
     CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
     ; Write uninstaller
@@ -72,6 +79,8 @@ SectionEnd
 Section "Uninstall"
     ; Remove files
     Delete "$INSTDIR\${APPEXE}"
+    Delete "$INSTDIR\${CLIBINARY}"
+    Delete "$INSTDIR\${GOLANG_APP}"
     Delete "$INSTDIR\uninstall.exe"
     RMDir /r "$INSTDIR\logs"
     RMDir /r "$INSTDIR\output"
@@ -79,6 +88,7 @@ Section "Uninstall"
 
     ; Remove shortcuts
     Delete "$DESKTOP\${APPNAME}.lnk"
+    Delete "$DESKTOP\${GOLANG_APPNAME}.lnk"
     Delete "$SMPROGRAMS\${APPNAME}\*.*"
     RMDir "$SMPROGRAMS\${APPNAME}"
 

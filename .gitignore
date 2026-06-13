@@ -48,3 +48,19 @@ release/
 download/
 edonish-auto/
 edonish-auto-repo/
+
+# Go binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go workspace
+go.work
+
+# Go cache
+/pkg/mod
+
+# Fyne cache
+.fyne/

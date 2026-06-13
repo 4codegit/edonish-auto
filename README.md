@@ -1,282 +1,347 @@
-# eDonish Auto 📚
+# Edonish Auto - Go/Fyne версия 📚
 
-**Автоматизация электронного журнала edonish.tj**
+**Автоматизация электронного журнала edonish.tj на Go с Fyne GUI**
 
-Десктопная программа для автоматического заполнения оценок в электронном журнале eDonish (г. Душанбе, Таджикистан).
+Десктопное приложение для автоматизации работы с образовательным порталом edonish.tj, написанное на **Go** с использованием **Fyne GUI**.
 
-## 🆕 Что нового в версии 3.24.0
+---
 
-### 🎯 Выбор конкретного ученика
-Теперь можно генерировать оценки только для выбранного ученика:
-1. Выберите класс, предмет и четверть
-2. Укажите минимальную и максимальную оценку (по умолчанию 5-10)
-3. Нажмите **"Анализировать"** (F5)
-4. После анализа появится список всех учеников
-5. Включите **"Только выбранного ученика"** и выберите нужного
-6. Нажмите **"Запустить"**
+## 🚀 Скачать готовую версию
 
-## Возможности
+### GitHub Releases
 
-- 🔐 **Автоматический вход** — логин через API, получение всех данных (школа, классы, предметы, четверти)
-- 📋 **Автоматический анализ** — программа сама находит все классы, предметы, четверти, даты и студентов
-- 🎯 **Авто-оценки** — заполнение оценок (8-10) на все пустые ячейки журнала
-- ⚡ **Параллельные воркеры** — многопоточная обработка (4+ воркеров одновременно)
-- 📊 **Просмотр журнала** — удобный просмотр оценок по классам/предметам/четвертям
-- 🔄 **Четвертные оценки** — автоматическое заполнение четвертных, семестровых и годовых оценок
-- 📝 **Логирование** — подробные логи всех операций
-- 📦 **Установщики** — .exe (Windows), .rpm/.deb (Linux), .dmg (macOS)
+Скачайте готовую версию для вашей платформы: [Releases](https://github.com/YOUR_USERNAME/edonish-app/releases)
 
-## Установка
+| Платформа | Файл | Установка |
+|-----------|------|-----------|
+| 🐧 Linux (DEB) | `edonish-app_x.x.x_amd64.deb` | `sudo dpkg -i edonish-app_x.x.x_amd64.deb` |
+| 🐧 Linux (RPM) | `edonish-app-x.x.x-1.x86_64.rpm` | `sudo rpm -i edonish-app-x.x.x-1.x86_64.rpm` |
+| 🪟 Windows | `edonish-app-windows.exe` | Запустить напрямую |
+| 🪟 Windows (Setup) | `edonish-app-windows-installer.exe` | Запустить установщик |
+| 🤖 Android | `edonish-app.apk` | Установить на устройстве |
 
-### 🪟 Windows
+---
 
-Скачайте `edonish-auto-2.0.0-setup.exe` и запустите установщик.
+## 🏃 Быстрый запуск (скачав релиз)
 
-Или используйте CLI без установки:
-```
-edonish-auto-cli.exe --login YOUR_LOGIN --password YOUR_PASSWORD
+### Linux (Ubuntu/Debian)
+```bash
+sudo dpkg -i edonish-app_x.x.x_amd64.deb
+sudo apt-get install -f  # если нужны зависимости
+edonish-app
 ```
 
-### 🐧 Linux (Ubuntu/Debian)
+### Linux (Fedora/RHEL)
+```bash
+sudo rpm -i edonish-app-x.x.x-1.x86_64.rpm
+edonish-app
+```
+
+### Windows
+```bash
+# Запустить напрямую
+edonish-app-windows.exe
+
+# ИЛИ установить
+edonish-app-windows-installer.exe
+```
+
+### Android
+```bash
+# Включите "Установка из неизвестных источников"
+# Установите APK
+adb install edonish-app.apk
+```
+
+### 1. Инициализация проекта
 
 ```bash
-# Установите .deb пакет
-sudo dpkg -i edonish-auto_2.0.0_amd64.deb
+# Создаём директорию проекта
+mkdir edonish-go-app
+cd edonish-go-app
 
-# Или запустите бинарник напрямую
-chmod +x edonish-auto-linux-x64
-./edonish-auto-linux-x64
+# Инициализируем Go модуль
+go mod init edonish-app
+
+# Создаём структуру папок
+mkdir client ui
 ```
 
-### 🐧 Linux (Fedora/RHEL)
+### 2. Установка системных зависимостей
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+```
+
+**macOS:**
+```bash
+brew install go
+brew install gcc
+```
+
+**Windows:**
+```bash
+# Установите MinGW-w64 через Chocolatey
+choco install mingw
+```
+
+### 3. Установка зависимостей Go
 
 ```bash
-sudo rpm -i edonish-auto-2.0.0-1.x86_64.rpm
+# Устанавливаем Fyne и другие зависимости
+go get fyne.io/fyne/v2@latest
+go get github.com/PuerkitoBio/goquery@latest
+
+# Обновляем модуль
+go mod tidy
 ```
 
-### 🍎 macOS
-
-Откройте `edonish-auto-2.0.0.dmg` и перетащите приложение в Applications.
-
-## Быстрый старт
-
-### Способ 1: Скачанный установщик
-
-1. Установите программу (см. выше)
-2. Запустите `eDonish Auto`
-3. Введите логин и пароль от edonish.tj
-4. Выберите класс, предмет, четверть
-5. Нажмите "Анализировать", затем "Запустить"
-
-### Способ 2: Python (ручная установка)
+### 4. Запуск приложения
 
 ```bash
-pip install customtkinter requests
-python3 main.py          # GUI режим
-python3 main_cli.py --login 200117707 --password test123  # CLI режим
+# Запуск в режиме разработки
+go run .
 ```
 
-### Способ 3: CLI режим
+### 5. Компиляция в исполняемый файл
 
 ```bash
-# Заполнить все пустые оценки
-edonish-auto-cli --login 200117707 --password test123
+# Linux
+GOOS=linux GOARCH=amd64 go build -o edonish-app .
 
-# Только конкретный класс/предмет/четверть
-edonish-auto-cli --login 200117707 --password test123 \
-  --class "8Б" --subject "Технологияи иттилоотӣ" --quarter "Чоряки 4"
+# Windows
+GOOS=windows GOARCH=amd64 go build -o edonish-app.exe .
 
-# Только анализ (без записи)
-edonish-auto-cli --login 200117707 --password test123 --analyze-only
-
-# Просмотр журнала
-edonish-auto-cli --login 200117707 --password test123 \
-  --view-journal --class "8Б" --subject "Технологияи иттилоотӣ" --quarter "Чоряки 4"
-
-# С сохранением отчёта в JSON
-edonish-auto-cli --login 200117707 --password test123 --save-report --json-output
+# macOS
+GOOS=darwin GOARCH=amd64 go build -o edonish-app .
 ```
 
-## Сборка из исходников
+---
 
-### Требования для сборки
-
-- Python 3.12+
-- PyInstaller: `pip install pyinstaller`
-- Для GUI: `pip install customtkinter`
-- Для RPM: `sudo apt install rpm` или `sudo dnf install rpm-build`
-- Для DEB: `dpkg-deb` (входит в Ubuntu/Debian)
-- Для Windows .exe: NSIS (на Windows)
-- Для macOS .dmg: `hdiutil` (на macOS)
-
-### Сборка
-
-```bash
-# Скомпилировать для текущей платформы
-bash build.sh linux     # Linux бинарники
-bash build.sh rpm       # Linux + RPM пакет (требует rpm-build, fpm)
-bash build.sh windows   # Windows (только на Windows)
-bash build.sh macos     # macOS (только на macOS)
-bash build.sh all       # Всё для текущей платформы
-
-# Альтернативная сборка RPM/DEB
-bash package.sh rpm     # RPM пакет
-bash package.sh deb     # DEB пакет
-
-# Или через Makefile
-make native-gui         # GUI напрямую
-make native-cli         # CLI напрямую
-```
-
-### Сборка для всех платформ
-
-#### 🐧 Linux (Fedora/RPM)
-```bash
-# Установите зависимости для сборки
-sudo dnf install rpm-build python3-pip
-
-# Скомпилируйте
-./build.sh linux
-./package.sh rpm
-
-# Получите RPM в dist/rpm/
-```
-
-#### 🪟 Windows
-```powershell
-# На Windows:
-pip install pyinstaller
-pyinstaller edonish-auto.spec --clean
-pyinstaller edonish-auto-cli.spec --clean
-
-# Получите .exe в dist\windows\
-```
-
-#### 🍎 macOS
-```bash
-# На macOS:
-pip3 install pyinstaller
-./build.sh macos
-
-# Получите DMG в dist/dmg/
-```
-
-#### 🤖 Android
-```bash
-# Требуется Flet для Android:
-pip install flet
-flet package android
-
-# Откройте build/android/ в Android Studio и соберите APK
-```
-
-### GitHub Actions CI/CD
-
-При пуше тега `v*` автоматически собираются все платформы и создаётся Release:
-
-```bash
-git tag v2.0.0
-git push origin v2.0.0
-```
-
-Артефакты в Release:
-- `edonish-auto-2.0.0-setup.exe` — Windows установщик
-- `edonish-auto_2.0.0_amd64.deb` — Ubuntu/Debian
-- `edonish-auto-2.0.0-1.x86_64.rpm` — Fedora/RHEL
-- `edonish-auto-2.0.0.dmg` — macOS
-
-## CLI параметры
+## 📋 Структура проекта
 
 ```
-edonish-auto-cli [OPTIONS]
-
-Обязательные:
-  --login LOGIN         Логин (ID) от edonish.tj
-  --password PASSWORD   Пароль от edonish.tj
-
-Фильтры:
-  --class CLASS         Класс (напр. '8Б') или 'all'
-  --subject SUBJECT     Предмет или 'all'
-  --quarter QUARTER     Четверть или 'all'
-
-Оценки:
-  --min-grade N         Минимальная оценка (default: 8)
-  --max-grade N         Максимальная оценка (default: 10)
-
-Выполнение:
-  --workers N           Воркеры (default: 4)
-  --fill-empty BOOL     Только пустые ячейки (default: True)
-  --quarter-marks BOOL  Четвертные оценки (default: True)
-  --analyze-only        Только анализ, без записи
-  --view-journal        Просмотр журнала
-
-Вывод:
-  --json-output         Результат в JSON
-  --save-report         Сохранить отчёт в файл
+edonish-app/
+├── main.go                    # Точка входа
+├── controller.go              # Контроллер приложения
+├── client/
+│   └── client.go              # HTTP клиент для API
+├── ui/
+│   ├── login_screen.go        # Экран авторизации
+│   └── dashboard.go           # Главное окно
+├── go.mod                     # Зависимости Go
+├── go.sum                     # Хеши зависимостей
+└── README.md                  # Документация
 ```
 
-## Структура проекта
+---
 
-```
-edonish-auto/
-├── main.py                 # GUI приложение (CustomTkinter)
-├── main_cli.py             # CLI интерфейс (headless)
-├── api_client.py           # API клиент edonish.tj
-├── grade_engine.py         # Движок автоматизации оценок
-├── config.py               # Конфигурация
-├── requirements.txt        # Зависимости Python
-├── edonish-auto.spec       # PyInstaller spec (GUI)
-├── edonish-auto-cli.spec   # PyInstaller spec (CLI)
-├── edonish-auto.spec.rpm   # RPM spec file
-├── installer.nsi           # NSIS installer (Windows)
-├── build.sh                # Скрипт сборки всех платформ
-├── package.sh              # DEB/RPM упаковка
-├── .github/workflows/      # CI/CD (Windows/Linux/macOS)
-├── .env.example            # Пример переменных окружения
-├── Makefile                # Удобные команды
-├── LICENSE.txt             # MIT лицензия
-└── run.sh                  # Скрипт запуска
+## ⚙️ Настройка API Endpoints
+
+### Изучение реальных API
+
+**ВАЖНО:** Перед использованием необходимо изучить реальные API-эндпоинты портала edonish.tj:
+
+1. Откройте сайт в браузере и откройте DevTools (F12)
+2. Перейдите на вкладку **Network**
+3. Выполните вход и найдите запросы к API
+4. Обновите URL-адреса в `controller.go`:
+
+```go
+// controller.go
+c.client, err = client.NewEdonishClient(
+    "https://edonish.tj",              // baseURL
+    "https://edonish.tj/api/auth/login", // authURL - ЗАМЕНИТЕ на реальный
+)
 ```
 
-## API Endpoints (обнаружено)
+### Обнаруженные endpoints (на основе Python версии)
 
 | Endpoint | Метод | Описание |
 |----------|-------|----------|
 | `/auth/v1/login` | POST | Авторизация |
-| `/auth/v1/refresh_token` | GET | Обновление токена |
-| `/auth/v1/header/info` | GET | Информация о пользователе |
-| `/teacher/v1/journal` | OPTIONS | Доступные классы/предметы |
+| `/teacher/v1/journal` | GET | Журнал оценок |
 | `/teacher/v1/journal/dates` | GET | Даты журнала |
 | `/teacher/v1/journal/students` | GET | Студенты с оценками |
 | `/teacher/v1/journal/10_point_mark/create` | POST | Создание оценки |
-| `/teacher/v1/journal/10_point_quarter_mark/create` | POST | Четвертная оценка |
-| `/teacher/v1/journal/10_point_semester/create` | POST | Семестровая оценка |
-| `/teacher/v1/journal/10_point_year/create` | POST | Годовая оценка |
-| `/teacher/v1/journal/mark/delete` | POST | Удаление оценки |
 | `/school_admin/v1/period/quaters` | GET | Список четвертей |
-| `/groups/list` | GET | Список классов школы |
-| `/teacher/subject` | GET | Предметы учителя |
-| `/subgroups` | GET | Подгруппы класса |
 
-## Поддерживаемые роли
+**Обновите `client/client.go`** с реальными эндпоинтами:
 
-| Роль | Префикс API |
-|------|-------------|
-| teacher | /teacher/v1 |
-| classroom-teacher | /teacher/v1 |
-| school_admin | /school_admin/v1 |
-| director | /director/v1 |
-| headteacher | /headteacher/v1 |
-| parent | /parent/v1 |
-| student | /student/v1 |
+```go
+// В структуре EdonishClient
+authURL:    "https://edonish.tj/auth/v1/login",      // Авторизация
+scheduleURL: "https://edonish.tj/teacher/v1/journal", // Расписание
+gradesURL:   "https://edonish.tj/teacher/v1/journal/students", // Оценки
+```
 
-## Безопасность
+---
 
-- Токены JWT хранятся только в памяти
-- Пароли не сохраняются
-- Все запросы идут через HTTPS
-- `.env` файлы исключены из Git
+## 🏗️ Архитектура
 
-## Лицензия
+Приложение следует принципам **чистой архитектуры**:
 
-MIT License — см. [LICENSE.txt](LICENSE.txt)
+```
+┌─────────────────┐
+│     main.go     │  ← Точка входа
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│  controller.go  │  ← Контроллер (связывает UI и Client)
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+┌───▼──┐  ┌──▼──────┐
+│  UI  │  │ Client  │  ← HTTP клиент (отделён от UI)
+└──────┘  └─────────┘
+```
+
+### Слои
+
+- **client/** - Работа с API (HTTP запросы, JSON парсинг, cookies)
+- **ui/** - Представление (виджеты Fyne, формы, таблицы)
+- **controller/** - Управление потоком (логика перехода между экранами)
+
+---
+
+## 🔐 Авторизация
+
+Пример входа с вашими данными:
+
+```
+Логин: 20011XXYX
+Пароль: ********
+```
+
+**Безопасность:** Пароли вводятся через UI и не хранятся в коде!
+
+---
+
+## 📊 Функциональность
+
+### Текущая версия
+
+- ✅ **Login UI** - Экран авторизации с полями логин/пароль
+- ✅ **Dashboard UI** - Главное окно с вкладками
+- ✅ **API Client** - HTTP клиент с cookie jar
+- ✅ **Обработка ошибок** - Всплывающие диалоги
+- ✅ **Таблицы данных** - Отображение расписания, оценок, ДЗ
+
+### Требуется доработка
+
+- ⏳ **Реальные API endpoints** - Замените заглушки на реальные URL
+- ⏳ **Структуры данных** - Адаптируйте под реальный JSON формат
+- ⏳ **HTML парсинг** - Добавьте goquery если API закрыт
+- ⏳ **Обновление данных** - Кнопка "Обновить" на дашборде
+
+---
+
+## 📦 Создание GitHub Release (для разработчиков)
+
+### Автоматическая сборка через GitHub Actions
+
+1. **Создайте и отправьте тег:**
+```bash
+# Локально создайте тег с версией
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+2. **GitHub Actions автоматически:**
+   - Собрать Linux бинарник
+   - Собрать DEB пакет (.deb)
+   - Собрать RPM пакет (.rpm)
+   - Собрать Windows бинарник (.exe)
+   - Собрать установщик Windows
+   - Собрать Android APK (.apk)
+   - Создать GitHub Release с файлами
+
+### Локальная сборка всех платформ
+
+```bash
+# Сделать все для текущей платформы
+bash build_all.sh v0.1.0 all
+
+# Или конкретную платформу
+bash build_linux.sh v0.1.0
+bash build_windows.sh v0.1.0
+bash build_android_go.sh v0.1.0
+```
+
+### Результат сборки
+
+Все файлы будут в `release/` директории:
+```
+release/
+├── linux/
+│   ├── edonish-app-linux
+│   ├── edonish-app_v0.1.0_amd64.deb
+│   └── edonish-app-0.1.0-1.x86_64.rpm
+├── windows/
+│   ├── edonish-app-windows.exe
+│   └── edonish-app-windows-installer.exe
+└── android/
+    └── edonish-app-0.1.0.apk
+```
+
+### Ручное создание Release
+
+1. Перейдите на [GitHub Releases](https://github.com/YOUR_USERNAME/edonish-app/releases/new)
+2. Выберите тег (создайте новый если нет)
+3. Добавьте название релиза
+4. Перетащите файлы из `release/`
+5. Опубликуйте
+
+---
+
+## 🐛 Устранение проблем
+
+### Ошибка компиляции Fyne
+
+```bash
+# Очистка кэша и перевыполнение
+go clean -modcache
+go mod tidy
+go run .
+```
+
+### Ошибка соединения
+
+1. Проверьте интернет-соединение
+2. Убедитесь, что URL-адреса API корректны
+3. Проверьте firewall/антивирус
+
+### Ошибка парсинга JSON
+
+1. Откройте DevTools в браузере
+2. Сравните реальный ответ API со структурами в `client/client.go`
+3. Обновите структуры при необходимости
+
+---
+
+## 📝 TODO - Что нужно сделать
+
+1. **Изучить реальные API endpoints** через DevTools браузера
+2. **Обновить структуры JSON** в `client/client.go` под реальный формат
+3. **Заменить заглушки URL** на реальные эндпоинты
+4. **Протестировать авторизацию** с реальным сервером
+5. **Добавить обработку HTML** через goquery если API недоступен
+
+---
+
+## 📄 Лицензия
+
+MIT License - образовательные цели. Используйте ответственно.
+
+---
+
+## 🤝 Вклад
+
+1. Форкните репозиторий
+2. Создайте ветку (`git checkout -b feature/amazing-feature`)
+3. Закоммитьте (`git commit -m 'Add something'`)
+4. Пушните (`git push origin feature/amazing-feature`)
+5. Откройте Pull Request
