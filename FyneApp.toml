@@ -2,7 +2,7 @@
   Icon = "Icon.png"
   Name = "eDonish Auto"
   ID = "com.edonish.auto"
-  Version = "0.5.0"
+  Version = "4.0.0"
   Build = 1
 
 [Merge]
